@@ -1,0 +1,6 @@
+apito_inicial()
+placar gols = 2;
+var_analisa (gols > 1) {
+  gols = gols + 1
+}
+fim_de_jogo

@@ -1,0 +1,23 @@
+# Java
+*.class
+out/
+target/
+build/
+bin/
+
+# IntelliJ IDEA
+.idea/
+*.iml
+
+# Eclipse
+.classpath
+.project
+.settings/
+.metadata/
+
+# VS Code
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db

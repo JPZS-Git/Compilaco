@@ -1,0 +1,266 @@
+options
+{
+  STATIC = true;
+}
+
+PARSER_BEGIN(Compilaco)
+package parser;
+
+public class Compilaco
+{
+  public static void main(String[] args)
+  {
+    boolean debug = false;
+    for (String arg : args) {
+      if ("--debug".equalsIgnoreCase(arg)) {
+        debug = true;
+      }
+    }
+
+    System.out.println("\n[Juiz em campo] Apito inicial!");
+    System.out.println("Digite o código. A análise começa automaticamente ao encontrar 'fim_de_jogo'.\n");
+
+    try {
+      java.io.BufferedReader reader = new java.io.BufferedReader(
+          new java.io.InputStreamReader(System.in, java.nio.charset.StandardCharsets.UTF_8)
+      );
+
+      StringBuilder codigo = new StringBuilder();
+      String linha;
+      boolean encontrouFim = false;
+
+      while ((linha = reader.readLine()) != null) {
+        codigo.append(linha).append('\n');
+
+        if (linha.trim().equals("fim_de_jogo")) {
+          encontrouFim = true;
+          break;
+        }
+      }
+
+      if (!encontrouFim) {
+        System.err.println("[ERRO DE ENTRADA] O código terminou sem 'fim_de_jogo'.");
+        return;
+      }
+
+      if (debug) {
+        System.out.println("[DEBUG] Código recebido:");
+        System.out.println("----------------------------------------");
+        System.out.print(codigo);
+        System.out.println("----------------------------------------");
+      }
+
+      java.io.ByteArrayInputStream input = new java.io.ByteArrayInputStream(
+          codigo.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8)
+      );
+
+      new Compilaco(input);
+
+      if (debug) {
+        imprimirTokens();
+
+        java.io.ByteArrayInputStream inputParser = new java.io.ByteArrayInputStream(
+            codigo.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8)
+        );
+        Compilaco.ReInit(inputParser);
+
+        System.out.println("[DEBUG] Iniciando análise sintática...");
+      }
+
+      Compilaco.inicio();
+
+      System.out.println("\n[GOL] Análise léxica e sintática concluída sem erros!");
+      System.out.println("=> Fim de jogo! O código é sintaticamente válido.");
+    }
+    catch (TokenMgrError e) {
+      System.err.println("\n[CARTÃO VERMELHO - ERRO LÉXICO]");
+      System.err.println("-> " + e.getMessage());
+    }
+    catch (ParseException e) {
+      imprimirErroSintatico(e);
+    }
+    catch (Exception e) {
+      System.err.println("\n[ERRO INTERNO DO COMPILADOR]");
+      e.printStackTrace();
+    }
+  }
+
+  private static void imprimirTokens() {
+    System.out.println("[DEBUG] Tokens reconhecidos pelo lexer:");
+
+    while (true) {
+      Token token = token_source.getNextToken();
+      String nome = token.kind >= 0 && token.kind < tokenImage.length
+          ? tokenImage[token.kind]
+          : String.valueOf(token.kind);
+
+      System.out.printf(
+          "  linha %-3d coluna %-3d %-22s -> %s%n",
+          token.beginLine,
+          token.beginColumn,
+          nome,
+          token.kind == EOF ? "<EOF>" : "'" + token.image + "'"
+      );
+
+      if (token.kind == EOF) {
+        break;
+      }
+    }
+
+    System.out.println();
+  }
+
+  private static void imprimirErroSintatico(ParseException e) {
+    System.err.println("\n[FALTA GRAVE - ERRO SINTÁTICO] O VAR interveio na compilação!");
+
+    if (e.currentToken != null && e.currentToken.next != null) {
+      Token token = e.currentToken.next;
+      String imagem = token.kind == EOF ? "<EOF>" : token.image;
+
+      System.err.println(
+          "-> Token irregular encontrado: '" + imagem +
+          "' na linha " + token.beginLine +
+          ", coluna " + token.beginColumn
+      );
+
+      java.util.LinkedHashSet<String> esperados = new java.util.LinkedHashSet<>();
+      for (int[] sequencia : e.expectedTokenSequences) {
+        if (sequencia.length > 0) {
+          esperados.add(tokenImage[sequencia[0]]);
+        }
+      }
+
+      if (!esperados.isEmpty()) {
+        System.err.println("-> A regra do jogo esperava: " + String.join(", ", esperados));
+      }
+    } else {
+      System.err.println("-> " + e.getMessage());
+    }
+  }
+}
+PARSER_END(Compilaco)
+
+SKIP :
+{
+  " " | "\r" | "\t" | "\n"
+}
+
+/* TOKENS DA LINGUAGEM - TEMÁTICA FUTEBOL */
+TOKEN : 
+{
+  < ABREMAIN    : "apito_inicial" >
+| < FECHAMAIN   : "fim_de_jogo" >
+| < ABREPAREN   : "(" >
+| < FECHAPAREN  : ")" >
+| < ABREBLOCO   : "{" >
+| < FECHABLOCO  : "}" >
+| < VIRGULA     : "," >
+| < ATRIBUICAO  : "=" >
+| < FIMINSTRUCT : ";" >
+
+/* TIPOS DE DADOS */
+| < TIPOINT     : "placar" >
+| < TIPOFLOAT   : "estatistica" >
+| < TIPOSTRING  : "narracao" >
+
+/* ESTRUTURAS DE CONTROLE */
+| < IF          : "var_analisa" >
+| < ELSE        : "segue_jogo" >
+| < WHILE       : "enquanto_bola_rolar" >
+| < FOR         : "campeonato" >
+
+/* OPERADORES */
+| < OP_REL      : ">=" | "<=" | "==" | "!=" | ">" | "<" >
+| < OP_ARIT     : "+" | "-" | "*" | "/" >
+
+/* IDENTIFICADORES E VALORES */
+| < IDENTIFICADOR : ["a"-"z", "A"-"Z"](["a"-"z", "A"-"Z", "0"-"9", "_"])* >
+| < CONSTANT      : (< DIGIT >)+ >
+| < FLOAT_LIT     : (< DIGIT >)+ "." (< DIGIT >)+ >
+| < STRING_LIT    : "\"" (~["\""])* "\"" >
+| < #DIGIT        : [ "0"-"9" ] >
+}
+
+/* REGRAS SINTÁTICAS */
+
+void inicio() :
+{}
+{
+  < ABREMAIN > < ABREPAREN > < FECHAPAREN >
+    ( comando() )*
+  < FECHAMAIN > < EOF >
+}
+
+void comando() :
+{}
+{
+    declaraVar() 
+  | atribuicaoIsolada()
+  | comandoIf() 
+  | comandoWhile() 
+  | comandoFor()
+}
+
+void tipoDado() :
+{}
+{
+  < TIPOINT > | < TIPOFLOAT > | < TIPOSTRING >
+}
+
+void valor() :
+{}
+{
+    < CONSTANT > | < FLOAT_LIT > | < STRING_LIT > | < IDENTIFICADOR >
+}
+
+void expressao() :
+{}
+{
+    valor() ( ( <OP_REL> | <OP_ARIT> ) valor() )*
+}
+
+/* Permite reatribuir valor a variáveis já existentes */
+void atribuicaoIsolada() :
+{}
+{
+    < IDENTIFICADOR > < ATRIBUICAO > expressao() < FIMINSTRUCT >
+}
+
+/* Declarar variáveis únicas ou em lista com/sem atribuição */
+void declaraVar() :
+{}
+{
+   tipoDado() 
+   < IDENTIFICADOR > ( < ATRIBUICAO > expressao() )?
+   ( < VIRGULA > < IDENTIFICADOR > ( < ATRIBUICAO > expressao() )? )* 
+   < FIMINSTRUCT >
+}
+
+/* Estrutura Condicional (If / Else) */
+void comandoIf() :
+{}
+{
+    < IF > < ABREPAREN > expressao() < FECHAPAREN >
+    < ABREBLOCO > ( comando() )* < FECHABLOCO >
+    ( LOOKAHEAD(1) < ELSE > < ABREBLOCO > ( comando() )* < FECHABLOCO > )?
+}
+
+/* Laço 1 (While) */
+void comandoWhile() :
+{}
+{
+    < WHILE > < ABREPAREN > expressao() < FECHAPAREN >
+    < ABREBLOCO > ( comando() )* < FECHABLOCO >
+}
+
+/* Laço 2 (For) */
+void comandoFor() :
+{}
+{
+    < FOR > < ABREPAREN > 
+    tipoDado() <IDENTIFICADOR> <ATRIBUICAO> valor() <FIMINSTRUCT>
+    expressao() <FIMINSTRUCT>
+    <IDENTIFICADOR> <ATRIBUICAO> expressao()
+    < FECHAPAREN >
+    < ABREBLOCO > ( comando() )* < FECHABLOCO >
+}

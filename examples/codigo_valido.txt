@@ -1,0 +1,23 @@
+apito_inicial()
+
+placar gols = 2, adversario = 1;
+estatistica posse = 62.5;
+narracao mensagem = "Vitoria do time da casa";
+
+saldo = gols - adversario;
+
+var_analisa (gols > adversario) {
+    narracao resultado = "ganhou";
+} segue_jogo {
+    narracao resultado = "empatou_ou_perdeu";
+}
+
+enquanto_bola_rolar (gols < 5) {
+    gols = gols + 1;
+}
+
+campeonato (placar rodada = 1; rodada <= 3; rodada = rodada + 1) {
+    placar pontos = rodada * 3;
+}
+
+fim_de_jogo
