@@ -677,10 +677,15 @@ static private int jjMoveNfa_0(int startState, int curPos)
                         kind = 24;
                      { jjCheckNAddStates(0, 2); }
                   }
-                  else if ((0xac0000000000L & l) != 0L)
+                  else if ((0x280000000000L & l) != 0L)
                   {
                      if (kind > 22)
                         kind = 22;
+                  }
+                  else if ((0x840000000000L & l) != 0L)
+                  {
+                     if (kind > 28)
+                        kind = 28;
                   }
                   else if ((0x5000000000000000L & l) != 0L)
                   {
@@ -719,7 +724,7 @@ static private int jjMoveNfa_0(int startState, int curPos)
                      kind = 21;
                   break;
                case 6:
-                  if ((0xac0000000000L & l) != 0L && kind > 22)
+                  if ((0x280000000000L & l) != 0L && kind > 22)
                      kind = 22;
                   break;
                case 8:
@@ -840,7 +845,7 @@ public static final String[] jjstrLiteralImages = {
 "\145\163\164\141\164\151\163\164\151\143\141", "\156\141\162\162\141\143\141\157", 
 "\166\141\162\137\141\156\141\154\151\163\141", "\163\145\147\165\145\137\152\157\147\157", 
 "\145\156\161\165\141\156\164\157\137\142\157\154\141\137\162\157\154\141\162", "\143\141\155\160\145\157\156\141\164\157", null, null, null, null, null, null, 
-null, };
+null, null, };
 static protected Token jjFillToken()
 {
    final Token t;
@@ -1056,10 +1061,10 @@ public static final String[] lexStateNames = {
 /** Lex State array. */
 public static final int[] jjnewLexState = {
    -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
-   -1, -1, -1, 
+   -1, -1, -1, -1, 
 };
 static final long[] jjtoToken = {
-   0x7ffffe1L, 
+   0x17ffffe1L, 
 };
 static final long[] jjtoSkip = {
    0x1eL, 

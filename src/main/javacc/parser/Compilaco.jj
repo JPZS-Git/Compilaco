@@ -73,7 +73,7 @@ public class Compilaco
       System.out.println("=> Fim de jogo! O código é sintaticamente válido.");
     }
     catch (TokenMgrError e) {
-      System.err.println("\n[CARTÃO VERMELHO - ERRO LÉXICO]");
+      System.err.println("\n[CARTÃO VERMELHO - ERRO LÉXICO] O juiz expulsou um símbolo do jogo!");
       System.err.println("-> " + e.getMessage());
     }
     catch (ParseException e) {
@@ -171,7 +171,7 @@ TOKEN :
 
 /* OPERADORES */
 | < OP_REL      : ">=" | "<=" | "==" | "!=" | ">" | "<" >
-| < OP_ARIT     : "+" | "-" | "*" | "/" >
+| < OP_SOMA     : "+" | "-" >
 
 /* IDENTIFICADORES E VALORES */
 | < IDENTIFICADOR : ["a"-"z", "A"-"Z"](["a"-"z", "A"-"Z", "0"-"9", "_"])* >
@@ -179,6 +179,12 @@ TOKEN :
 | < FLOAT_LIT     : (< DIGIT >)+ "." (< DIGIT >)+ >
 | < STRING_LIT    : "\"" (~["\""])* "\"" >
 | < #DIGIT        : [ "0"-"9" ] >
+}
+
+/* OPERADORES MULTIPLICATIVOS (maior precedência que OP_SOMA) */
+TOKEN :
+{
+  < OP_MULT : "*" | "/" >
 }
 
 /* REGRAS SINTÁTICAS */
@@ -213,10 +219,37 @@ void valor() :
     < CONSTANT > | < FLOAT_LIT > | < STRING_LIT > | < IDENTIFICADOR >
 }
 
+/*
+ * Expressões em níveis de precedência (do menor para o maior):
+ *   expressao : comparação (no máximo um operador relacional)
+ *   exprArit  : soma e subtração      (associativas à esquerda)
+ *   termo     : multiplicação e divisão (associativas à esquerda)
+ *   fator     : valor, parênteses ou sinal unário
+ */
 void expressao() :
 {}
 {
-    valor() ( ( <OP_REL> | <OP_ARIT> ) valor() )*
+    exprArit() ( <OP_REL> exprArit() )?
+}
+
+void exprArit() :
+{}
+{
+    termo() ( <OP_SOMA> termo() )*
+}
+
+void termo() :
+{}
+{
+    fator() ( <OP_MULT> fator() )*
+}
+
+void fator() :
+{}
+{
+    valor()
+  | <ABREPAREN> expressao() <FECHAPAREN>
+  | <OP_SOMA> fator()
 }
 
 /* Permite reatribuir valor a variáveis já existentes */

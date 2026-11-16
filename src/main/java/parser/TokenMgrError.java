@@ -101,14 +101,33 @@ public class TokenMgrError extends Error
    *    errorAfter  : prefix that was seen before this error occurred
    *    curchar     : the offending character
    * Note: You can customize the lexical error message by modifying this method.
+   *
+   * Compilaço: mensagem personalizada em português, exibindo o próprio
+   * caractere inválido (e não o seu código numérico).
    */
   protected static String LexicalErr(boolean EOFSeen, int lexState, int errorLine, int errorColumn, String errorAfter, int curChar) {
-    return("Lexical error at line " + //
-          errorLine + ", column " + //
-          errorColumn + ".  Encountered: " + //
-          (EOFSeen ? "<EOF>" : ("'" + addEscapes(String.valueOf(curChar)) + "' (" + curChar + "),")) + //
-          (errorAfter == null || errorAfter.length() == 0 ? "" : " after prefix \"" + addEscapes(errorAfter) + "\"")) + //
-          (lexState == 0 ? "" : " (in lexical state " + lexState + ")");
+    if (EOFSeen) {
+      if (errorAfter != null && errorAfter.startsWith("\"")) {
+        String inicio = errorAfter.split("\n", 2)[0];
+        if (inicio.length() > 30) {
+          inicio = inicio.substring(0, 30);
+        }
+        return "Narração (string) aberta e nunca fechada: " + inicio +
+               "... — faltou fechar as aspas.";
+      }
+      return "Fim do código inesperado na linha " + errorLine + ".";
+    }
+
+    String depois = (errorAfter == null || errorAfter.length() == 0)
+        ? ""
+        : " (logo após \"" + addEscapes(errorAfter) + "\")";
+
+    char c = (char) curChar;
+    String simbolo = (c >= 0x20 && c != 0x7f) ? String.valueOf(c) : addEscapes(String.valueOf(c));
+
+    return "Símbolo inválido encontrado: '" + simbolo + "' na linha " + errorLine +
+           ", coluna " + errorColumn + depois +
+           ". Esse símbolo não pertence ao alfabeto da linguagem Compilaço.";
   }
 
   /**

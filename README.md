@@ -63,13 +63,13 @@ Os arquivos Java gerados pelo JavaCC já estão incluídos, portanto o projeto p
 Abra um terminal na raiz e execute:
 
 ```bat
-run-valid.bat
+.\run-valid.bat
 ```
 
 Para testar o erro sintático:
 
 ```bat
-run-error.bat
+.\run-error.bat
 ```
 
 ## Teste rápido no Linux/macOS

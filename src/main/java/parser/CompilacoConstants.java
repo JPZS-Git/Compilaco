@@ -45,7 +45,7 @@ public interface CompilacoConstants {
   /** RegularExpression Id. */
   int OP_REL = 21;
   /** RegularExpression Id. */
-  int OP_ARIT = 22;
+  int OP_SOMA = 22;
   /** RegularExpression Id. */
   int IDENTIFICADOR = 23;
   /** RegularExpression Id. */
@@ -56,6 +56,8 @@ public interface CompilacoConstants {
   int STRING_LIT = 26;
   /** RegularExpression Id. */
   int DIGIT = 27;
+  /** RegularExpression Id. */
+  int OP_MULT = 28;
 
   /** Lexical state. */
   int DEFAULT = 0;
@@ -84,12 +86,13 @@ public interface CompilacoConstants {
     "\"enquanto_bola_rolar\"",
     "\"campeonato\"",
     "<OP_REL>",
-    "<OP_ARIT>",
+    "<OP_SOMA>",
     "<IDENTIFICADOR>",
     "<CONSTANT>",
     "<FLOAT_LIT>",
     "<STRING_LIT>",
     "<DIGIT>",
+    "<OP_MULT>",
   };
 
 }
