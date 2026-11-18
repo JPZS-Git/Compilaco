@@ -1,6 +1,6 @@
 options
 {
-  STATIC = true;
+  STATIC = false;
 }
 
 PARSER_BEGIN(Compilaco)
