@@ -156,6 +156,17 @@ public class Main {
         );
     }
 
+    /* ESSA VERSÃO DEVE SER APLICADA DEPOIS DE SER FEITA AS MODIFICAÇÕES NO JAVACC
+    private static ErroCompilacao converterErroLexico(TokenMgrError erro) {
+        return new ErroCompilacao(
+                TipoErro.LEXICO,
+                erro.getErrorLine(),
+                erro.getErrorColumn(),
+                erro.getMessage()
+        );
+    }
+     */
+
     private static ErroCompilacao converterErroSintatico(ParseException erro) {
         Token token = erro.currentToken != null
                 ? erro.currentToken.next
