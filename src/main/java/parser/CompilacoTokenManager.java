@@ -655,7 +655,7 @@ static final long[] jjbitVec0 = {
 static private int jjMoveNfa_0(int startState, int curPos)
 {
    int startsAt = 0;
-   jjnewStateCnt = 17;
+   jjnewStateCnt = 18;
    int i = 1;
    jjstateSet[0] = startState;
    int kind = 0x7fffffff;
@@ -677,15 +677,15 @@ static private int jjMoveNfa_0(int startState, int curPos)
                         kind = 24;
                      { jjCheckNAddStates(0, 2); }
                   }
-                  else if ((0x280000000000L & l) != 0L)
-                  {
-                     if (kind > 22)
-                        kind = 22;
-                  }
                   else if ((0x840000000000L & l) != 0L)
                   {
                      if (kind > 28)
                         kind = 28;
+                  }
+                  else if ((0x280000000000L & l) != 0L)
+                  {
+                     if (kind > 22)
+                        kind = 22;
                   }
                   else if ((0x5000000000000000L & l) != 0L)
                   {
@@ -747,33 +747,37 @@ static private int jjMoveNfa_0(int startState, int curPos)
                      kind = 26;
                   break;
                case 12:
-                  if ((0x3ff000000000000L & l) == 0L)
-                     break;
-                  if (kind > 24)
-                     kind = 24;
-                  { jjCheckNAddStates(0, 2); }
+                  if ((0x840000000000L & l) != 0L && kind > 28)
+                     kind = 28;
                   break;
                case 13:
                   if ((0x3ff000000000000L & l) == 0L)
                      break;
                   if (kind > 24)
                      kind = 24;
-                  { jjCheckNAdd(13); }
+                  { jjCheckNAddStates(0, 2); }
                   break;
                case 14:
-                  if ((0x3ff000000000000L & l) != 0L)
-                     { jjCheckNAddTwoStates(14, 15); }
+                  if ((0x3ff000000000000L & l) == 0L)
+                     break;
+                  if (kind > 24)
+                     kind = 24;
+                  { jjCheckNAdd(14); }
                   break;
                case 15:
-                  if (curChar == 46)
-                     { jjCheckNAdd(16); }
+                  if ((0x3ff000000000000L & l) != 0L)
+                     { jjCheckNAddTwoStates(15, 16); }
                   break;
                case 16:
+                  if (curChar == 46)
+                     { jjCheckNAdd(17); }
+                  break;
+               case 17:
                   if ((0x3ff000000000000L & l) == 0L)
                      break;
                   if (kind > 25)
                      kind = 25;
-                  { jjCheckNAdd(16); }
+                  { jjCheckNAdd(17); }
                   break;
                default : break;
             }
@@ -830,7 +834,7 @@ static private int jjMoveNfa_0(int startState, int curPos)
          kind = 0x7fffffff;
       }
       ++curPos;
-      if ((i = jjnewStateCnt) == (startsAt = 17 - (jjnewStateCnt = startsAt)))
+      if ((i = jjnewStateCnt) == (startsAt = 18 - (jjnewStateCnt = startsAt)))
          return curPos;
       try { curChar = input_stream.readChar(); }
       catch(java.io.IOException e) { return curPos; }
@@ -870,7 +874,7 @@ static protected Token jjFillToken()
    return t;
 }
 static final int[] jjnextStates = {
-   13, 14, 15, 10, 11, 
+   14, 15, 16, 10, 11, 
 };
 
 static int curLexState = 0;
@@ -1031,7 +1035,7 @@ static private void jjCheckNAddStates(int start, int end)
   {
     int i;
     jjround = 0x80000001;
-    for (i = 17; i-- > 0;)
+    for (i = 18; i-- > 0;)
       jjrounds[i] = 0x80000000;
   }
 
@@ -1077,8 +1081,8 @@ static final long[] jjtoMore = {
 };
     static protected SimpleCharStream  input_stream;
 
-    static private final int[] jjrounds = new int[17];
-    static private final int[] jjstateSet = new int[2 * 17];
+    static private final int[] jjrounds = new int[18];
+    static private final int[] jjstateSet = new int[2 * 18];
     private static final StringBuilder jjimage = new StringBuilder();
     private static StringBuilder image = jjimage;
     private static int jjimageLen;
