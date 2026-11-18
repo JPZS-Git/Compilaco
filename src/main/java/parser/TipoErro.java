@@ -1,4 +1,8 @@
 package parser;
 
-public class TipoErro {
+public enum TipoErro {
+    LEXICO,
+    SINTATICO,
+    ENTRADA,
+    INTERNO
 }
