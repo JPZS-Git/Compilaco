@@ -19,6 +19,8 @@ Compilaco-generico/
 │       │       ├── Compilaco.java
 │       │       ├── CompilacoConstants.java
 │       │       ├── CompilacoTokenManager.java
+│       │       ├── Main.java
+│       │       ├── No.java              (nó da árvore sintática)
 │       │       ├── ParseException.java
 │       │       ├── SimpleCharStream.java
 │       │       ├── Token.java
@@ -41,7 +43,7 @@ Abra a pasta raiz do projeto. Se a IDE reconhecer Maven, importe o `pom.xml`.
 A classe principal é:
 
 ```text
-parser.Compilaco
+parser.Main
 ```
 
 O diretório de fontes Java é:
@@ -95,7 +97,7 @@ javac -encoding UTF-8 -d out src/main/java/parser/*.java
 Execute:
 
 ```text
-java -cp out parser.Compilaco --debug
+java -cp out parser.Main --debug
 ```
 
 O programa começa a análise automaticamente quando encontra uma linha contendo:
@@ -105,6 +107,118 @@ fim_de_jogo
 ```
 
 Não é necessário enviar EOF manualmente.
+
+## Árvore sintática
+
+Cada regra da gramática (`inicio`, `comando`, `expressao`, `termo`...) devolve um nó da classe `No`, com o nome da regra; os filhos são as sub-regras e os tokens consumidos, na ordem em que aparecem. A árvore é impressa no terminal depois de uma análise sem erros, com a opção `--arvore` (ou `--debug`, que também mostra os tokens).
+
+### Windows (PowerShell)
+
+Na raiz do projeto, compile:
+
+```powershell
+.\build.bat
+```
+
+Árvore do exemplo válido:
+
+```powershell
+cmd /c "java -cp out parser.Main --arvore < examples\codigo_valido.txt"
+```
+
+Exemplo com erro (mostra o relatório de erros, sem árvore):
+
+```powershell
+cmd /c "java -cp out parser.Main --arvore < examples\codigo_com_erro.txt"
+```
+
+Digitando o código no terminal (termine com uma linha `fim_de_jogo`):
+
+```powershell
+java -cp out parser.Main --arvore
+```
+
+O `cmd /c` é necessário porque o PowerShell não aceita `<` para redirecionar a entrada. Evite `Get-Content arquivo | java ...`: no Windows PowerShell isso estraga os acentos.
+
+### Linux/macOS
+
+```sh
+./build.sh
+java -cp out parser.Main --arvore < examples/codigo_valido.txt
+```
+
+### IntelliJ
+
+Em **Run → Edit Configurations…**, crie uma configuração *Application* com:
+
+- **Main class:** `parser.Main`
+- **Program arguments:** `--arvore`
+- **Modify options → Redirect input from:** `examples\codigo_valido.txt` (opcional; sem isso, digite o código no console)
+
+### Exemplo: precedência em `2 + 3 * 4`
+
+Entrada:
+
+```text
+apito_inicial()
+placar x = 2 + 3 * 4;
+fim_de_jogo
+```
+
+Saída (o `*` fica dentro de um `termo`, abaixo do `+`):
+
+```text
+inicio
+|-- apito_inicial
+|-- (
+|-- )
+|-- comando
+|   `-- declaraVar
+|       |-- tipoDado
+|       |   `-- placar
+|       |-- x
+|       |-- =
+|       |-- expressao
+|       |   `-- exprArit
+|       |       |-- termo
+|       |       |   `-- fator
+|       |       |       `-- valor
+|       |       |           `-- 2
+|       |       |-- +
+|       |       `-- termo
+|       |           |-- fator
+|       |           |   `-- valor
+|       |           |       `-- 3
+|       |           |-- *
+|       |           `-- fator
+|       |               `-- valor
+|       |                   `-- 4
+|       `-- ;
+`-- fim_de_jogo
+```
+
+### Acentos no terminal do Windows
+
+Se aparecer `?` ou caracteres estranhos no lugar dos acentos (ex.: `RELAT?RIO`, `c├│digo`), é só a página de código do console. Antes de rodar, use:
+
+```powershell
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+```
+
+ou, se não resolver:
+
+```powershell
+chcp 850
+java "-Dsun.stdout.encoding=cp850" -cp out parser.Main --arvore
+```
+
+### Regenerando o parser
+
+Se alterar `Compilaco.jj`, regenere os arquivos Java com JavaCC 7 informando a codificação UTF-8 (sem isso, no Windows os acentos da gramática quebram a compilação):
+
+```text
+java -Dfile.encoding=UTF-8 -cp javacc.jar javacc -GRAMMAR_ENCODING=UTF-8 -OUTPUT_DIRECTORY=src/main/java/parser src/main/javacc/parser/Compilaco.jj
+```
 
 ## Observação
 
