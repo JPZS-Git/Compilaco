@@ -16,6 +16,7 @@ Compilaco-generico/
 │   └── main/
 │       ├── java/
 │       │   └── parser/
+│       │       ├── ArquivoFonte.java    (leitura/gravação UTF-8 + JFileChooser)
 │       │       ├── Compilaco.java
 │       │       ├── CompilacoConstants.java
 │       │       ├── CompilacoTokenManager.java
@@ -94,19 +95,49 @@ Compile:
 javac -encoding UTF-8 -d out src/main/java/parser/*.java
 ```
 
-Execute:
+Execute passando o arquivo com o código:
+
+```text
+java -cp out parser.Main examples/codigo_valido.txt --debug
+```
+
+Sem o caminho do arquivo, abre uma janela (JFileChooser) para escolher o código:
 
 ```text
 java -cp out parser.Main --debug
 ```
 
-O programa começa a análise automaticamente quando encontra uma linha contendo:
+Opções (em qualquer ordem):
 
-```text
-fim_de_jogo
+| Opção | Efeito |
+|---|---|
+| `arquivo` | Caminho do código a analisar. Sem ele, abre o seletor de arquivos. |
+| `--arvore` | Imprime a árvore sintática depois de uma análise sem erros. |
+| `--debug` | Mostra o código lido, os tokens e a árvore. |
+
+## Leitura e gravação de arquivos
+
+A classe `ArquivoFonte` cuida dos arquivos de código:
+
+- lê o arquivo **inteiro** com `Files.readString` e o parser recebe todo o texto, sem cortar em `fim_de_jogo` (se houver algo depois dele, é apontado como erro sintático);
+- lê e grava sempre em **UTF-8** (o BOM que o Bloco de Notas às vezes grava é ignorado; arquivo que não está em UTF-8 gera um erro de entrada com aviso);
+- `abrir(janela)` mostra o `JFileChooser` e devolve o texto (ou `null` se cancelar);
+- `salvar(janela, texto)` grava no arquivo atual ou, se o código for novo, pergunta onde salvar; `salvarComo(janela, texto)` sempre pergunta. Ao salvar, pede confirmação antes de substituir um arquivo e acrescenta `.txt` se o nome não tiver extensão.
+
+Na interface gráfica, os botões usam um único objeto:
+
+```java
+ArquivoFonte arquivo = new ArquivoFonte();
+
+String codigo = arquivo.abrir(janela);          // botão Abrir
+if (codigo != null) editor.setText(codigo);
+
+arquivo.salvar(janela, editor.getText());       // botão Salvar
+
+new Compilaco(new java.io.StringReader(editor.getText())); // botão Compilar
 ```
 
-Não é necessário enviar EOF manualmente.
+O parser recebe o texto por `StringReader` (e não por bytes), assim os acentos dentro de `narracao` chegam corretos, independentemente do charset padrão do sistema.
 
 ## Árvore sintática
 
@@ -123,28 +154,26 @@ Na raiz do projeto, compile:
 Árvore do exemplo válido:
 
 ```powershell
-cmd /c "java -cp out parser.Main --arvore < examples\codigo_valido.txt"
+java -cp out parser.Main examples\codigo_valido.txt --arvore
 ```
 
 Exemplo com erro (mostra o relatório de erros, sem árvore):
 
 ```powershell
-cmd /c "java -cp out parser.Main --arvore < examples\codigo_com_erro.txt"
+java -cp out parser.Main examples\codigo_com_erro.txt --arvore
 ```
 
-Digitando o código no terminal (termine com uma linha `fim_de_jogo`):
+Escolhendo o arquivo numa janela (JFileChooser):
 
 ```powershell
 java -cp out parser.Main --arvore
 ```
 
-O `cmd /c` é necessário porque o PowerShell não aceita `<` para redirecionar a entrada. Evite `Get-Content arquivo | java ...`: no Windows PowerShell isso estraga os acentos.
-
 ### Linux/macOS
 
 ```sh
 ./build.sh
-java -cp out parser.Main --arvore < examples/codigo_valido.txt
+java -cp out parser.Main examples/codigo_valido.txt --arvore
 ```
 
 ### IntelliJ
@@ -152,8 +181,8 @@ java -cp out parser.Main --arvore < examples/codigo_valido.txt
 Em **Run → Edit Configurations…**, crie uma configuração *Application* com:
 
 - **Main class:** `parser.Main`
-- **Program arguments:** `--arvore`
-- **Modify options → Redirect input from:** `examples\codigo_valido.txt` (opcional; sem isso, digite o código no console)
+- **Program arguments:** `examples\codigo_valido.txt --arvore` (sem o arquivo, abre o seletor de arquivos)
+- **Working directory:** a pasta raiz do projeto
 
 ### Exemplo: precedência em `2 + 3 * 4`
 

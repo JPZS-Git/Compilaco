@@ -7,4 +7,4 @@ call build.bat
 
 if errorlevel 1 exit /b 1
 
-java -cp out parser.Main --debug < examples\codigo_valido.txt
+java -cp out parser.Main examples\codigo_valido.txt --debug

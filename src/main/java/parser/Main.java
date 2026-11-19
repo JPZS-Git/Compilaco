@@ -1,10 +1,8 @@
 package parser;
 
-import java.io.BufferedReader;
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
+import java.io.StringReader;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -12,61 +10,64 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+/**
+ * Execução pelo terminal:
+ *
+ *   java -cp out parser.Main [arquivo] [--arvore] [--debug]
+ *
+ * Sem o caminho do arquivo, abre um JFileChooser para escolher o código.
+ * O arquivo é lido inteiro em UTF-8 e passado ao parser (sem cortar em fim_de_jogo).
+ */
 public class Main {
 
-    private static final String TERMINADOR = "fim_de_jogo";
     private static final Pattern POSICAO_ERRO =
             Pattern.compile("linha\\s+(\\d+),\\s*coluna\\s+(\\d+)");
 
     public static void main(String[] args) {
-        boolean debug = List.of(args).contains("--debug");
-        boolean mostrarArvore = List.of(args).contains("--arvore");
+        boolean debug = false;
+        boolean mostrarArvore = false;
+        Path caminho = null;
 
-        System.out.println("\n[Juiz em campo] Apito inicial!");
-        System.out.println("Digite o código. A análise começa ao encontrar 'fim_de_jogo'.\n");
-
-        try {
-            executar(debug, mostrarArvore);
-        } catch (IOException e) {
-            List<ErroCompilacao> erros = new ArrayList<>();
-            erros.add(new ErroCompilacao(
-                    TipoErro.ENTRADA, 0, 0,
-                    "Não foi possível ler a entrada: " + e.getMessage()
-            ));
-            imprimirErros(erros);
-        }
-    }
-
-    private static void executar(boolean debug, boolean mostrarArvore) throws IOException {
-        BufferedReader reader = new BufferedReader(
-                new InputStreamReader(System.in, StandardCharsets.UTF_8)
-        );
-
-        StringBuilder codigo = new StringBuilder();
-        String linha;
-        boolean encontrouFim = false;
-        int numeroLinha = 0;
-
-        while ((linha = reader.readLine()) != null) {
-            numeroLinha++;
-            codigo.append(linha).append('\n');
-
-            if (linha.trim().equals(TERMINADOR)) {
-                encontrouFim = true;
-                break;
+        for (String arg : args) {
+            if ("--debug".equalsIgnoreCase(arg)) {
+                debug = true;
+            } else if ("--arvore".equalsIgnoreCase(arg)) {
+                mostrarArvore = true;
+            } else if (caminho == null) {
+                caminho = Path.of(arg);
             }
         }
 
-        if (!encontrouFim) {
+        System.out.println("\n[Juiz em campo] Apito inicial!");
+
+        ArquivoFonte arquivo = new ArquivoFonte();
+        String codigo;
+
+        try {
+            if (caminho != null) {
+                codigo = arquivo.abrir(caminho);
+            } else {
+                System.out.println("Escolha o arquivo com o código Compilaco...");
+                codigo = arquivo.abrir((java.awt.Component) null);
+                if (codigo == null) {
+                    System.out.println("Nenhum arquivo selecionado. Fim de jogo antes do apito!");
+                    return;
+                }
+            }
+        } catch (IOException e) {
             imprimirErros(List.of(new ErroCompilacao(
-                    TipoErro.ENTRADA,
-                    numeroLinha,
-                    1,
-                    "O código terminou sem o terminador 'fim_de_jogo'."
+                    TipoErro.ENTRADA, 0, 0,
+                    "Não foi possível ler o arquivo: " + e.getMessage()
             )));
             return;
         }
 
+        System.out.println("Arquivo: " + arquivo.getCaminho().toAbsolutePath() + "\n");
+        executar(codigo, debug, mostrarArvore);
+    }
+
+    /** Analisa o código inteiro (o conteúdo completo do arquivo). */
+    private static void executar(String codigo, boolean debug, boolean mostrarArvore) {
         if (debug) {
             System.out.println("[DEBUG] Código recebido:");
             System.out.println("----------------------------------------");
@@ -74,16 +75,16 @@ public class Main {
             System.out.println("----------------------------------------");
         }
 
-        byte[] codigoBytes = codigo.toString().getBytes(StandardCharsets.UTF_8);
         List<ErroCompilacao> erros = new ArrayList<>();
 
         try {
-            // STATIC = false: o parser agora é um objeto (não há mais métodos estáticos)
-            Compilaco parser = new Compilaco(new ByteArrayInputStream(codigoBytes));
+            // O texto vai como String (StringReader): assim o parser não depende
+            // do charset padrão do sistema e os acentos chegam intactos.
+            Compilaco parser = new Compilaco(new StringReader(codigo));
 
             if (debug) {
                 imprimirTokens(parser);
-                parser.ReInit(new ByteArrayInputStream(codigoBytes));
+                parser.ReInit(new StringReader(codigo));
                 System.out.println("[DEBUG] Iniciando análise sintática...\n");
             }
 
