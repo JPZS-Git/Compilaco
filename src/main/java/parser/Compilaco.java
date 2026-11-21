@@ -3,142 +3,22 @@
 package parser;
 
 public class Compilaco implements CompilacoConstants {
-  public static void main(String[] args)
-  {
-    boolean debug = false;
-    for (String arg : args) {
-      if ("--debug".equalsIgnoreCase(arg)) {
-        debug = true;
-      }
-    }
 
-    System.out.println("\n[Juiz em campo] Apito inicial!");
-    System.out.println("Digite o código. A análise começa automaticamente ao encontrar 'fim_de_jogo'.\n");
-
-    try {
-      java.io.BufferedReader reader = new java.io.BufferedReader(
-          new java.io.InputStreamReader(System.in, java.nio.charset.StandardCharsets.UTF_8)
-      );
-
-      StringBuilder codigo = new StringBuilder();
-      String linha;
-      boolean encontrouFim = false;
-
-      while ((linha = reader.readLine()) != null) {
-        codigo.append(linha).append('\n');
-
-        if (linha.trim().equals("fim_de_jogo")) {
-          encontrouFim = true;
-          break;
-        }
-      }
-
-      if (!encontrouFim) {
-        System.err.println("[ERRO DE ENTRADA] O código terminou sem 'fim_de_jogo'.");
-        return;
-      }
-
-      if (debug) {
-        System.out.println("[DEBUG] Código recebido:");
-        System.out.println("----------------------------------------");
-        System.out.print(codigo);
-        System.out.println("----------------------------------------");
-      }
-
-      java.io.ByteArrayInputStream input = new java.io.ByteArrayInputStream(
-          codigo.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8)
-      );
-
-      new Compilaco(input);
-
-      if (debug) {
-        imprimirTokens();
-
-        java.io.ByteArrayInputStream inputParser = new java.io.ByteArrayInputStream(
-            codigo.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8)
-        );
-        Compilaco.ReInit(inputParser);
-
-        System.out.println("[DEBUG] Iniciando análise sintática...");
-      }
-
-      Compilaco.inicio();
-
-      System.out.println("\n[GOL] Análise léxica e sintática concluída sem erros!");
-      System.out.println("=> Fim de jogo! O código é sintaticamente válido.");
-    }
-    catch (TokenMgrError e) {
-      System.err.println("\n[CARTÃO VERMELHO - ERRO LÉXICO] O juiz expulsou um símbolo do jogo!");
-      System.err.println("-> " + e.getMessage());
-    }
-    catch (ParseException e) {
-      imprimirErroSintatico(e);
-    }
-    catch (Exception e) {
-      System.err.println("\n[ERRO INTERNO DO COMPILADOR]");
-      e.printStackTrace();
-    }
-  }
-
-  private static void imprimirTokens() {
-    System.out.println("[DEBUG] Tokens reconhecidos pelo lexer:");
-
-    while (true) {
-      Token token = token_source.getNextToken();
-      String nome = token.kind >= 0 && token.kind < tokenImage.length
-          ? tokenImage[token.kind]
-          : String.valueOf(token.kind);
-
-      System.out.printf(
-          "  linha %-3d coluna %-3d %-22s -> %s%n",
-          token.beginLine,
-          token.beginColumn,
-          nome,
-          token.kind == EOF ? "<EOF>" : "'" + token.image + "'"
-      );
-
-      if (token.kind == EOF) {
-        break;
-      }
-    }
-
-    System.out.println();
-  }
-
-  private static void imprimirErroSintatico(ParseException e) {
-    System.err.println("\n[FALTA GRAVE - ERRO SINTÁTICO] O VAR interveio na compilação!");
-
-    if (e.currentToken != null && e.currentToken.next != null) {
-      Token token = e.currentToken.next;
-      String imagem = token.kind == EOF ? "<EOF>" : token.image;
-
-      System.err.println(
-          "-> Token irregular encontrado: '" + imagem +
-          "' na linha " + token.beginLine +
-          ", coluna " + token.beginColumn
-      );
-
-      java.util.LinkedHashSet<String> esperados = new java.util.LinkedHashSet<>();
-      for (int[] sequencia : e.expectedTokenSequences) {
-        if (sequencia.length > 0) {
-          esperados.add(tokenImage[sequencia[0]]);
-        }
-      }
-
-      if (!esperados.isEmpty()) {
-        System.err.println("-> A regra do jogo esperava: " + String.join(", ", esperados));
-      }
-    } else {
-      System.err.println("-> " + e.getMessage());
-    }
-  }
-
-/* REGRAS SINTÁTICAS */
-  static final public 
-void inicio() throws ParseException {
-    jj_consume_token(ABREMAIN);
-    jj_consume_token(ABREPAREN);
-    jj_consume_token(FECHAPAREN);
+/* REGRAS SINTÁTICAS
+ *
+ * Cada regra devolve o seu nó da árvore sintática (classe No):
+ *   - o nó tem o nome da regra (ex.: "termo");
+ *   - os filhos são as sub-regras chamadas e os tokens consumidos, na ordem
+ *     em que aparecem (ex.: termo -> fator, *, fator).
+ */
+  final public 
+No inicio() throws ParseException {No no = new No("inicio"); Token t; No filho;
+    t = jj_consume_token(ABREMAIN);
+no.add(t);
+    t = jj_consume_token(ABREPAREN);
+no.add(t);
+    t = jj_consume_token(FECHAPAREN);
+no.add(t);
     label_1:
     while (true) {
       switch ((jj_ntk==-1)?jj_ntk_f():jj_ntk) {
@@ -156,34 +36,44 @@ void inicio() throws ParseException {
         jj_la1[0] = jj_gen;
         break label_1;
       }
-      comando();
+      filho = comando();
+no.add(filho);
     }
-    jj_consume_token(FECHAMAIN);
+    t = jj_consume_token(FECHAMAIN);
+no.add(t);
     jj_consume_token(0);
+{if ("" != null) return no;}
+    throw new Error("Missing return statement in function");
 }
 
-  static final public void comando() throws ParseException {
+/*
+ * Quando o modo pânico for implementado, o catch deste comando deve devolver
+ * um nó de erro no lugar do comando descartado, ex.:
+ *   return no.add(No.erro("comando descartado"));
+ * Assim a árvore continua sendo montada mesmo com erro.
+ */
+  final public No comando() throws ParseException {No no = new No("comando"); No filho;
     switch ((jj_ntk==-1)?jj_ntk_f():jj_ntk) {
     case TIPOINT:
     case TIPOFLOAT:
     case TIPOSTRING:{
-      declaraVar();
+      filho = declaraVar();
       break;
       }
     case IDENTIFICADOR:{
-      atribuicaoIsolada();
+      filho = atribuicaoIsolada();
       break;
       }
     case IF:{
-      comandoIf();
+      filho = comandoIf();
       break;
       }
     case WHILE:{
-      comandoWhile();
+      filho = comandoWhile();
       break;
       }
     case FOR:{
-      comandoFor();
+      filho = comandoFor();
       break;
       }
     default:
@@ -191,20 +81,22 @@ void inicio() throws ParseException {
       jj_consume_token(-1);
       throw new ParseException();
     }
+{if ("" != null) return no.add(filho);}
+    throw new Error("Missing return statement in function");
 }
 
-  static final public void tipoDado() throws ParseException {
+  final public No tipoDado() throws ParseException {No no = new No("tipoDado"); Token t;
     switch ((jj_ntk==-1)?jj_ntk_f():jj_ntk) {
     case TIPOINT:{
-      jj_consume_token(TIPOINT);
+      t = jj_consume_token(TIPOINT);
       break;
       }
     case TIPOFLOAT:{
-      jj_consume_token(TIPOFLOAT);
+      t = jj_consume_token(TIPOFLOAT);
       break;
       }
     case TIPOSTRING:{
-      jj_consume_token(TIPOSTRING);
+      t = jj_consume_token(TIPOSTRING);
       break;
       }
     default:
@@ -212,24 +104,26 @@ void inicio() throws ParseException {
       jj_consume_token(-1);
       throw new ParseException();
     }
+{if ("" != null) return no.add(t);}
+    throw new Error("Missing return statement in function");
 }
 
-  static final public void valor() throws ParseException {
+  final public No valor() throws ParseException {No no = new No("valor"); Token t;
     switch ((jj_ntk==-1)?jj_ntk_f():jj_ntk) {
     case CONSTANT:{
-      jj_consume_token(CONSTANT);
+      t = jj_consume_token(CONSTANT);
       break;
       }
     case FLOAT_LIT:{
-      jj_consume_token(FLOAT_LIT);
+      t = jj_consume_token(FLOAT_LIT);
       break;
       }
     case STRING_LIT:{
-      jj_consume_token(STRING_LIT);
+      t = jj_consume_token(STRING_LIT);
       break;
       }
     case IDENTIFICADOR:{
-      jj_consume_token(IDENTIFICADOR);
+      t = jj_consume_token(IDENTIFICADOR);
       break;
       }
     default:
@@ -237,24 +131,40 @@ void inicio() throws ParseException {
       jj_consume_token(-1);
       throw new ParseException();
     }
+{if ("" != null) return no.add(t);}
+    throw new Error("Missing return statement in function");
 }
 
-  static final public void expressao() throws ParseException {
-    exprArit();
+/*
+ * Expressões em níveis de precedência (do menor para o maior):
+ *   expressao : comparação (no máximo um operador relacional)
+ *   exprArit  : soma e subtração      (associativas à esquerda)
+ *   termo     : multiplicação e divisão (associativas à esquerda)
+ *   fator     : valor, parênteses ou sinal unário
+ *
+ * Como termo fica dentro de exprArit, em "2 + 3 * 4" o * aparece abaixo do +.
+ */
+  final public No expressao() throws ParseException {No no = new No("expressao"); Token t; No filho;
+    filho = exprArit();
+no.add(filho);
     switch ((jj_ntk==-1)?jj_ntk_f():jj_ntk) {
     case OP_REL:{
-      jj_consume_token(OP_REL);
-      exprArit();
+      t = jj_consume_token(OP_REL);
+      filho = exprArit();
+no.add(t).add(filho);
       break;
       }
     default:
       jj_la1[4] = jj_gen;
       ;
     }
+{if ("" != null) return no;}
+    throw new Error("Missing return statement in function");
 }
 
-  static final public void exprArit() throws ParseException {
-    termo();
+  final public No exprArit() throws ParseException {No no = new No("exprArit"); Token t; No filho;
+    filho = termo();
+no.add(filho);
     label_2:
     while (true) {
       switch ((jj_ntk==-1)?jj_ntk_f():jj_ntk) {
@@ -266,13 +176,17 @@ void inicio() throws ParseException {
         jj_la1[5] = jj_gen;
         break label_2;
       }
-      jj_consume_token(OP_SOMA);
-      termo();
+      t = jj_consume_token(OP_SOMA);
+      filho = termo();
+no.add(t).add(filho);
     }
+{if ("" != null) return no;}
+    throw new Error("Missing return statement in function");
 }
 
-  static final public void termo() throws ParseException {
-    fator();
+  final public No termo() throws ParseException {No no = new No("termo"); Token t; No filho;
+    filho = fator();
+no.add(filho);
     label_3:
     while (true) {
       switch ((jj_ntk==-1)?jj_ntk_f():jj_ntk) {
@@ -284,29 +198,35 @@ void inicio() throws ParseException {
         jj_la1[6] = jj_gen;
         break label_3;
       }
-      jj_consume_token(OP_MULT);
-      fator();
+      t = jj_consume_token(OP_MULT);
+      filho = fator();
+no.add(t).add(filho);
     }
+{if ("" != null) return no;}
+    throw new Error("Missing return statement in function");
 }
 
-  static final public void fator() throws ParseException {
+  final public No fator() throws ParseException {No no = new No("fator"); Token t; Token t2; No filho;
     switch ((jj_ntk==-1)?jj_ntk_f():jj_ntk) {
     case IDENTIFICADOR:
     case CONSTANT:
     case FLOAT_LIT:
     case STRING_LIT:{
-      valor();
+      filho = valor();
+no.add(filho);
       break;
       }
     case ABREPAREN:{
-      jj_consume_token(ABREPAREN);
-      expressao();
-      jj_consume_token(FECHAPAREN);
+      t = jj_consume_token(ABREPAREN);
+      filho = expressao();
+      t2 = jj_consume_token(FECHAPAREN);
+no.add(t).add(filho).add(t2);
       break;
       }
     case OP_SOMA:{
-      jj_consume_token(OP_SOMA);
-      fator();
+      t = jj_consume_token(OP_SOMA);
+      filho = fator();
+no.add(t).add(filho);
       break;
       }
     default:
@@ -314,24 +234,35 @@ void inicio() throws ParseException {
       jj_consume_token(-1);
       throw new ParseException();
     }
+{if ("" != null) return no;}
+    throw new Error("Missing return statement in function");
 }
 
 /* Permite reatribuir valor a variáveis já existentes */
-  static final public void atribuicaoIsolada() throws ParseException {
-    jj_consume_token(IDENTIFICADOR);
-    jj_consume_token(ATRIBUICAO);
-    expressao();
-    jj_consume_token(FIMINSTRUCT);
+  final public No atribuicaoIsolada() throws ParseException {No no = new No("atribuicao"); Token t; No filho;
+    t = jj_consume_token(IDENTIFICADOR);
+no.add(t);
+    t = jj_consume_token(ATRIBUICAO);
+no.add(t);
+    filho = expressao();
+no.add(filho);
+    t = jj_consume_token(FIMINSTRUCT);
+no.add(t);
+{if ("" != null) return no;}
+    throw new Error("Missing return statement in function");
 }
 
 /* Declarar variáveis únicas ou em lista com/sem atribuição */
-  static final public void declaraVar() throws ParseException {
-    tipoDado();
-    jj_consume_token(IDENTIFICADOR);
+  final public No declaraVar() throws ParseException {No no = new No("declaraVar"); Token t; No filho;
+    filho = tipoDado();
+no.add(filho);
+    t = jj_consume_token(IDENTIFICADOR);
+no.add(t);
     switch ((jj_ntk==-1)?jj_ntk_f():jj_ntk) {
     case ATRIBUICAO:{
-      jj_consume_token(ATRIBUICAO);
-      expressao();
+      t = jj_consume_token(ATRIBUICAO);
+      filho = expressao();
+no.add(t).add(filho);
       break;
       }
     default:
@@ -349,12 +280,15 @@ void inicio() throws ParseException {
         jj_la1[9] = jj_gen;
         break label_4;
       }
-      jj_consume_token(VIRGULA);
-      jj_consume_token(IDENTIFICADOR);
+      t = jj_consume_token(VIRGULA);
+no.add(t);
+      t = jj_consume_token(IDENTIFICADOR);
+no.add(t);
       switch ((jj_ntk==-1)?jj_ntk_f():jj_ntk) {
       case ATRIBUICAO:{
-        jj_consume_token(ATRIBUICAO);
-        expressao();
+        t = jj_consume_token(ATRIBUICAO);
+        filho = expressao();
+no.add(t).add(filho);
         break;
         }
       default:
@@ -362,16 +296,30 @@ void inicio() throws ParseException {
         ;
       }
     }
-    jj_consume_token(FIMINSTRUCT);
+    t = jj_consume_token(FIMINSTRUCT);
+no.add(t);
+{if ("" != null) return no;}
+    throw new Error("Missing return statement in function");
 }
 
+/*
+ * Nos comandos com bloco, os comandos entre { } ficam agrupados num nó "bloco"
+ * (só na árvore; a gramática continua a mesma), para separar o bloco do
+ * var_analisa do bloco do segue_jogo.
+ */
+
 /* Estrutura Condicional (If / Else) */
-  static final public void comandoIf() throws ParseException {
-    jj_consume_token(IF);
-    jj_consume_token(ABREPAREN);
-    expressao();
-    jj_consume_token(FECHAPAREN);
-    jj_consume_token(ABREBLOCO);
+  final public No comandoIf() throws ParseException {No no = new No("comandoIf"); No bloco; Token t; No filho;
+    t = jj_consume_token(IF);
+no.add(t);
+    t = jj_consume_token(ABREPAREN);
+no.add(t);
+    filho = expressao();
+no.add(filho);
+    t = jj_consume_token(FECHAPAREN);
+no.add(t);
+    t = jj_consume_token(ABREBLOCO);
+bloco = new No("bloco").add(t); no.add(bloco);
     label_5:
     while (true) {
       switch ((jj_ntk==-1)?jj_ntk_f():jj_ntk) {
@@ -389,13 +337,17 @@ void inicio() throws ParseException {
         jj_la1[11] = jj_gen;
         break label_5;
       }
-      comando();
+      filho = comando();
+bloco.add(filho);
     }
-    jj_consume_token(FECHABLOCO);
+    t = jj_consume_token(FECHABLOCO);
+bloco.add(t);
     switch ((jj_ntk==-1)?jj_ntk_f():jj_ntk) {
     case ELSE:{
-      jj_consume_token(ELSE);
-      jj_consume_token(ABREBLOCO);
+      t = jj_consume_token(ELSE);
+no.add(t);
+      t = jj_consume_token(ABREBLOCO);
+bloco = new No("bloco").add(t); no.add(bloco);
       label_6:
       while (true) {
         switch ((jj_ntk==-1)?jj_ntk_f():jj_ntk) {
@@ -413,24 +365,33 @@ void inicio() throws ParseException {
           jj_la1[12] = jj_gen;
           break label_6;
         }
-        comando();
+        filho = comando();
+bloco.add(filho);
       }
-      jj_consume_token(FECHABLOCO);
+      t = jj_consume_token(FECHABLOCO);
+bloco.add(t);
       break;
       }
     default:
       jj_la1[13] = jj_gen;
       ;
     }
+{if ("" != null) return no;}
+    throw new Error("Missing return statement in function");
 }
 
 /* Laço 1 (While) */
-  static final public void comandoWhile() throws ParseException {
-    jj_consume_token(WHILE);
-    jj_consume_token(ABREPAREN);
-    expressao();
-    jj_consume_token(FECHAPAREN);
-    jj_consume_token(ABREBLOCO);
+  final public No comandoWhile() throws ParseException {No no = new No("comandoWhile"); No bloco; Token t; No filho;
+    t = jj_consume_token(WHILE);
+no.add(t);
+    t = jj_consume_token(ABREPAREN);
+no.add(t);
+    filho = expressao();
+no.add(filho);
+    t = jj_consume_token(FECHAPAREN);
+no.add(t);
+    t = jj_consume_token(ABREBLOCO);
+bloco = new No("bloco").add(t); no.add(bloco);
     label_7:
     while (true) {
       switch ((jj_ntk==-1)?jj_ntk_f():jj_ntk) {
@@ -448,27 +409,45 @@ void inicio() throws ParseException {
         jj_la1[14] = jj_gen;
         break label_7;
       }
-      comando();
+      filho = comando();
+bloco.add(filho);
     }
-    jj_consume_token(FECHABLOCO);
+    t = jj_consume_token(FECHABLOCO);
+bloco.add(t);
+{if ("" != null) return no;}
+    throw new Error("Missing return statement in function");
 }
 
 /* Laço 2 (For) */
-  static final public void comandoFor() throws ParseException {
-    jj_consume_token(FOR);
-    jj_consume_token(ABREPAREN);
-    tipoDado();
-    jj_consume_token(IDENTIFICADOR);
-    jj_consume_token(ATRIBUICAO);
-    valor();
-    jj_consume_token(FIMINSTRUCT);
-    expressao();
-    jj_consume_token(FIMINSTRUCT);
-    jj_consume_token(IDENTIFICADOR);
-    jj_consume_token(ATRIBUICAO);
-    expressao();
-    jj_consume_token(FECHAPAREN);
-    jj_consume_token(ABREBLOCO);
+  final public No comandoFor() throws ParseException {No no = new No("comandoFor"); No bloco; Token t; No filho;
+    t = jj_consume_token(FOR);
+no.add(t);
+    t = jj_consume_token(ABREPAREN);
+no.add(t);
+    filho = tipoDado();
+no.add(filho);
+    t = jj_consume_token(IDENTIFICADOR);
+no.add(t);
+    t = jj_consume_token(ATRIBUICAO);
+no.add(t);
+    filho = valor();
+no.add(filho);
+    t = jj_consume_token(FIMINSTRUCT);
+no.add(t);
+    filho = expressao();
+no.add(filho);
+    t = jj_consume_token(FIMINSTRUCT);
+no.add(t);
+    t = jj_consume_token(IDENTIFICADOR);
+no.add(t);
+    t = jj_consume_token(ATRIBUICAO);
+no.add(t);
+    filho = expressao();
+no.add(filho);
+    t = jj_consume_token(FECHAPAREN);
+no.add(t);
+    t = jj_consume_token(ABREBLOCO);
+bloco = new No("bloco").add(t); no.add(bloco);
     label_8:
     while (true) {
       switch ((jj_ntk==-1)?jj_ntk_f():jj_ntk) {
@@ -486,22 +465,25 @@ void inicio() throws ParseException {
         jj_la1[15] = jj_gen;
         break label_8;
       }
-      comando();
+      filho = comando();
+bloco.add(filho);
     }
-    jj_consume_token(FECHABLOCO);
+    t = jj_consume_token(FECHABLOCO);
+bloco.add(t);
+{if ("" != null) return no;}
+    throw new Error("Missing return statement in function");
 }
 
-  static private boolean jj_initialized_once = false;
   /** Generated Token Manager. */
-  static public CompilacoTokenManager token_source;
-  static SimpleCharStream jj_input_stream;
+  public CompilacoTokenManager token_source;
+  SimpleCharStream jj_input_stream;
   /** Current token. */
-  static public Token token;
+  public Token token;
   /** Next token. */
-  static public Token jj_nt;
-  static private int jj_ntk;
-  static private int jj_gen;
-  static final private int[] jj_la1 = new int[16];
+  public Token jj_nt;
+  private int jj_ntk;
+  private int jj_gen;
+  final private int[] jj_la1 = new int[16];
   static private int[] jj_la1_0;
   static {
 	   jj_la1_init_0();
@@ -516,13 +498,6 @@ void inicio() throws ParseException {
   }
   /** Constructor with InputStream and supplied encoding */
   public Compilaco(java.io.InputStream stream, String encoding) {
-	 if (jj_initialized_once) {
-	   System.out.println("ERROR: Second call to constructor of static parser.  ");
-	   System.out.println("	   You must either use ReInit() or set the JavaCC option STATIC to false");
-	   System.out.println("	   during parser generation.");
-	   throw new Error();
-	 }
-	 jj_initialized_once = true;
 	 try { jj_input_stream = new SimpleCharStream(stream, encoding, 1, 1); } catch(java.io.UnsupportedEncodingException e) { throw new RuntimeException(e); }
 	 token_source = new CompilacoTokenManager(jj_input_stream);
 	 token = new Token();
@@ -532,11 +507,11 @@ void inicio() throws ParseException {
   }
 
   /** Reinitialise. */
-  static public void ReInit(java.io.InputStream stream) {
+  public void ReInit(java.io.InputStream stream) {
 	  ReInit(stream, null);
   }
   /** Reinitialise. */
-  static public void ReInit(java.io.InputStream stream, String encoding) {
+  public void ReInit(java.io.InputStream stream, String encoding) {
 	 try { jj_input_stream.ReInit(stream, encoding, 1, 1); } catch(java.io.UnsupportedEncodingException e) { throw new RuntimeException(e); }
 	 token_source.ReInit(jj_input_stream);
 	 token = new Token();
@@ -547,13 +522,6 @@ void inicio() throws ParseException {
 
   /** Constructor. */
   public Compilaco(java.io.Reader stream) {
-	 if (jj_initialized_once) {
-	   System.out.println("ERROR: Second call to constructor of static parser. ");
-	   System.out.println("	   You must either use ReInit() or set the JavaCC option STATIC to false");
-	   System.out.println("	   during parser generation.");
-	   throw new Error();
-	 }
-	 jj_initialized_once = true;
 	 jj_input_stream = new SimpleCharStream(stream, 1, 1);
 	 token_source = new CompilacoTokenManager(jj_input_stream);
 	 token = new Token();
@@ -563,7 +531,7 @@ void inicio() throws ParseException {
   }
 
   /** Reinitialise. */
-  static public void ReInit(java.io.Reader stream) {
+  public void ReInit(java.io.Reader stream) {
 	if (jj_input_stream == null) {
 	   jj_input_stream = new SimpleCharStream(stream, 1, 1);
 	} else {
@@ -582,13 +550,6 @@ void inicio() throws ParseException {
 
   /** Constructor with generated Token Manager. */
   public Compilaco(CompilacoTokenManager tm) {
-	 if (jj_initialized_once) {
-	   System.out.println("ERROR: Second call to constructor of static parser. ");
-	   System.out.println("	   You must either use ReInit() or set the JavaCC option STATIC to false");
-	   System.out.println("	   during parser generation.");
-	   throw new Error();
-	 }
-	 jj_initialized_once = true;
 	 token_source = tm;
 	 token = new Token();
 	 jj_ntk = -1;
@@ -605,7 +566,7 @@ void inicio() throws ParseException {
 	 for (int i = 0; i < 16; i++) jj_la1[i] = -1;
   }
 
-  static private Token jj_consume_token(int kind) throws ParseException {
+  private Token jj_consume_token(int kind) throws ParseException {
 	 Token oldToken;
 	 if ((oldToken = token).next != null) token = token.next;
 	 else token = token.next = token_source.getNextToken();
@@ -621,7 +582,7 @@ void inicio() throws ParseException {
 
 
 /** Get the next Token. */
-  static final public Token getNextToken() {
+  final public Token getNextToken() {
 	 if (token.next != null) token = token.next;
 	 else token = token.next = token_source.getNextToken();
 	 jj_ntk = -1;
@@ -630,7 +591,7 @@ void inicio() throws ParseException {
   }
 
 /** Get the specific Token. */
-  static final public Token getToken(int index) {
+  final public Token getToken(int index) {
 	 Token t = token;
 	 for (int i = 0; i < index; i++) {
 	   if (t.next != null) t = t.next;
@@ -639,19 +600,19 @@ void inicio() throws ParseException {
 	 return t;
   }
 
-  static private int jj_ntk_f() {
+  private int jj_ntk_f() {
 	 if ((jj_nt=token.next) == null)
 	   return (jj_ntk = (token.next=token_source.getNextToken()).kind);
 	 else
 	   return (jj_ntk = jj_nt.kind);
   }
 
-  static private java.util.List<int[]> jj_expentries = new java.util.ArrayList<int[]>();
-  static private int[] jj_expentry;
-  static private int jj_kind = -1;
+  private java.util.List<int[]> jj_expentries = new java.util.ArrayList<int[]>();
+  private int[] jj_expentry;
+  private int jj_kind = -1;
 
   /** Generate ParseException. */
-  static public ParseException generateParseException() {
+  public ParseException generateParseException() {
 	 jj_expentries.clear();
 	 boolean[] la1tokens = new boolean[29];
 	 if (jj_kind >= 0) {
@@ -681,19 +642,19 @@ void inicio() throws ParseException {
 	 return new ParseException(token, exptokseq, tokenImage);
   }
 
-  static private boolean trace_enabled;
+  private boolean trace_enabled;
 
 /** Trace enabled. */
-  static final public boolean trace_enabled() {
+  final public boolean trace_enabled() {
 	 return trace_enabled;
   }
 
   /** Enable tracing. */
-  static final public void enable_tracing() {
+  final public void enable_tracing() {
   }
 
   /** Disable tracing. */
-  static final public void disable_tracing() {
+  final public void disable_tracing() {
   }
 
 }

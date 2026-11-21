@@ -6,4 +6,4 @@ cd "$(dirname "$0")"
 
 ./build.sh
 
-java -cp out parser.Main --debug < examples/codigo_valido.txt
+java -cp out parser.Main examples/codigo_valido.txt --debug
