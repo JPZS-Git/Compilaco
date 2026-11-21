@@ -59,36 +59,57 @@ TOKEN :
   < OP_MULT : "*" | "/" >
 }
 
-/* REGRAS SINTÁTICAS */
+/* REGRAS SINTÁTICAS
+ *
+ * Cada regra devolve o seu nó da árvore sintática (classe No):
+ *   - o nó tem o nome da regra (ex.: "termo");
+ *   - os filhos são as sub-regras chamadas e os tokens consumidos, na ordem
+ *     em que aparecem (ex.: termo -> fator, *, fator).
+ */
 
-void inicio() :
-{}
+No inicio() :
+{ No no = new No("inicio"); Token t; No filho; }
 {
-  < ABREMAIN > < ABREPAREN > < FECHAPAREN >
-    ( comando() )*
-  < FECHAMAIN > < EOF >
+  t = < ABREMAIN >   { no.add(t); }
+  t = < ABREPAREN >  { no.add(t); }
+  t = < FECHAPAREN > { no.add(t); }
+    ( filho = comando() { no.add(filho); } )*
+  t = < FECHAMAIN >  { no.add(t); }
+  < EOF >
+  { return no; }
 }
 
-void comando() :
-{}
+/*
+ * Quando o modo pânico for implementado, o catch deste comando deve devolver
+ * um nó de erro no lugar do comando descartado, ex.:
+ *   return no.add(No.erro("comando descartado"));
+ * Assim a árvore continua sendo montada mesmo com erro.
+ */
+No comando() :
+{ No no = new No("comando"); No filho; }
 {
-    declaraVar() 
-  | atribuicaoIsolada()
-  | comandoIf() 
-  | comandoWhile() 
-  | comandoFor()
+  (
+      filho = declaraVar()
+    | filho = atribuicaoIsolada()
+    | filho = comandoIf()
+    | filho = comandoWhile()
+    | filho = comandoFor()
+  )
+  { return no.add(filho); }
 }
 
-void tipoDado() :
-{}
+No tipoDado() :
+{ No no = new No("tipoDado"); Token t; }
 {
-  < TIPOINT > | < TIPOFLOAT > | < TIPOSTRING >
+  ( t = < TIPOINT > | t = < TIPOFLOAT > | t = < TIPOSTRING > )
+  { return no.add(t); }
 }
 
-void valor() :
-{}
+No valor() :
+{ No no = new No("valor"); Token t; }
 {
-    < CONSTANT > | < FLOAT_LIT > | < STRING_LIT > | < IDENTIFICADOR >
+  ( t = < CONSTANT > | t = < FLOAT_LIT > | t = < STRING_LIT > | t = < IDENTIFICADOR > )
+  { return no.add(t); }
 }
 
 /*
@@ -97,75 +118,138 @@ void valor() :
  *   exprArit  : soma e subtração      (associativas à esquerda)
  *   termo     : multiplicação e divisão (associativas à esquerda)
  *   fator     : valor, parênteses ou sinal unário
+ *
+ * Como termo fica dentro de exprArit, em "2 + 3 * 4" o * aparece abaixo do +.
  */
-void expressao() :
-{}
+No expressao() :
+{ No no = new No("expressao"); Token t; No filho; }
 {
-    exprArit() ( <OP_REL> exprArit() )?
+    filho = exprArit() { no.add(filho); }
+    (
+      t = < OP_REL > filho = exprArit() { no.add(t).add(filho); }
+    )?
+    { return no; }
 }
 
-void exprArit() :
-{}
+No exprArit() :
+{ No no = new No("exprArit"); Token t; No filho; }
 {
-    termo() ( <OP_SOMA> termo() )*
+    filho = termo() { no.add(filho); }
+    (
+      t = < OP_SOMA > filho = termo() { no.add(t).add(filho); }
+    )*
+    { return no; }
 }
 
-void termo() :
-{}
+No termo() :
+{ No no = new No("termo"); Token t; No filho; }
 {
-    fator() ( <OP_MULT> fator() )*
+    filho = fator() { no.add(filho); }
+    (
+      t = < OP_MULT > filho = fator() { no.add(t).add(filho); }
+    )*
+    { return no; }
 }
 
-void fator() :
-{}
+No fator() :
+{ No no = new No("fator"); Token t; Token t2; No filho; }
 {
-    valor()
-  | <ABREPAREN> expressao() <FECHAPAREN>
-  | <OP_SOMA> fator()
+  (
+      filho = valor() { no.add(filho); }
+    | t = < ABREPAREN > filho = expressao() t2 = < FECHAPAREN >
+      { no.add(t).add(filho).add(t2); }
+    | t = < OP_SOMA > filho = fator() { no.add(t).add(filho); }
+  )
+  { return no; }
 }
 
 /* Permite reatribuir valor a variáveis já existentes */
-void atribuicaoIsolada() :
-{}
+No atribuicaoIsolada() :
+{ No no = new No("atribuicao"); Token t; No filho; }
 {
-    < IDENTIFICADOR > < ATRIBUICAO > expressao() < FIMINSTRUCT >
+    t = < IDENTIFICADOR > { no.add(t); }
+    t = < ATRIBUICAO >    { no.add(t); }
+    filho = expressao()   { no.add(filho); }
+    t = < FIMINSTRUCT >   { no.add(t); }
+    { return no; }
 }
 
 /* Declarar variáveis únicas ou em lista com/sem atribuição */
-void declaraVar() :
-{}
+No declaraVar() :
+{ No no = new No("declaraVar"); Token t; No filho; }
 {
-   tipoDado() 
-   < IDENTIFICADOR > ( < ATRIBUICAO > expressao() )?
-   ( < VIRGULA > < IDENTIFICADOR > ( < ATRIBUICAO > expressao() )? )* 
-   < FIMINSTRUCT >
+   filho = tipoDado() { no.add(filho); }
+   t = < IDENTIFICADOR > { no.add(t); }
+   ( t = < ATRIBUICAO > filho = expressao() { no.add(t).add(filho); } )?
+   (
+     t = < VIRGULA > { no.add(t); }
+     t = < IDENTIFICADOR > { no.add(t); }
+     ( t = < ATRIBUICAO > filho = expressao() { no.add(t).add(filho); } )?
+   )*
+   t = < FIMINSTRUCT > { no.add(t); }
+   { return no; }
 }
 
+/*
+ * Nos comandos com bloco, os comandos entre { } ficam agrupados num nó "bloco"
+ * (só na árvore; a gramática continua a mesma), para separar o bloco do
+ * var_analisa do bloco do segue_jogo.
+ */
+
 /* Estrutura Condicional (If / Else) */
-void comandoIf() :
-{}
+No comandoIf() :
+{ No no = new No("comandoIf"); No bloco; Token t; No filho; }
 {
-    < IF > < ABREPAREN > expressao() < FECHAPAREN >
-    < ABREBLOCO > ( comando() )* < FECHABLOCO >
-    ( LOOKAHEAD(1) < ELSE > < ABREBLOCO > ( comando() )* < FECHABLOCO > )?
+    t = < IF >          { no.add(t); }
+    t = < ABREPAREN >   { no.add(t); }
+    filho = expressao() { no.add(filho); }
+    t = < FECHAPAREN >  { no.add(t); }
+    t = < ABREBLOCO >   { bloco = new No("bloco").add(t); no.add(bloco); }
+      ( filho = comando() { bloco.add(filho); } )*
+    t = < FECHABLOCO >  { bloco.add(t); }
+    (
+      LOOKAHEAD(1)
+      t = < ELSE >        { no.add(t); }
+      t = < ABREBLOCO >   { bloco = new No("bloco").add(t); no.add(bloco); }
+        ( filho = comando() { bloco.add(filho); } )*
+      t = < FECHABLOCO >  { bloco.add(t); }
+    )?
+    { return no; }
 }
 
 /* Laço 1 (While) */
-void comandoWhile() :
-{}
+No comandoWhile() :
+{ No no = new No("comandoWhile"); No bloco; Token t; No filho; }
 {
-    < WHILE > < ABREPAREN > expressao() < FECHAPAREN >
-    < ABREBLOCO > ( comando() )* < FECHABLOCO >
+    t = < WHILE >       { no.add(t); }
+    t = < ABREPAREN >   { no.add(t); }
+    filho = expressao() { no.add(filho); }
+    t = < FECHAPAREN >  { no.add(t); }
+    t = < ABREBLOCO >   { bloco = new No("bloco").add(t); no.add(bloco); }
+      ( filho = comando() { bloco.add(filho); } )*
+    t = < FECHABLOCO >  { bloco.add(t); }
+    { return no; }
 }
 
 /* Laço 2 (For) */
-void comandoFor() :
-{}
+No comandoFor() :
+{ No no = new No("comandoFor"); No bloco; Token t; No filho; }
 {
-    < FOR > < ABREPAREN > 
-    tipoDado() <IDENTIFICADOR> <ATRIBUICAO> valor() <FIMINSTRUCT>
-    expressao() <FIMINSTRUCT>
-    <IDENTIFICADOR> <ATRIBUICAO> expressao()
-    < FECHAPAREN >
-    < ABREBLOCO > ( comando() )* < FECHABLOCO >
+    t = < FOR >           { no.add(t); }
+    t = < ABREPAREN >     { no.add(t); }
+    filho = tipoDado()    { no.add(filho); }
+    t = < IDENTIFICADOR > { no.add(t); }
+    t = < ATRIBUICAO >    { no.add(t); }
+    filho = valor()       { no.add(filho); }
+    t = < FIMINSTRUCT >   { no.add(t); }
+    filho = expressao()   { no.add(filho); }
+    t = < FIMINSTRUCT >   { no.add(t); }
+    t = < IDENTIFICADOR > { no.add(t); }
+    t = < ATRIBUICAO >    { no.add(t); }
+    filho = expressao()   { no.add(filho); }
+    t = < FECHAPAREN >    { no.add(t); }
+    t = < ABREBLOCO >     { bloco = new No("bloco").add(t); no.add(bloco); }
+      ( filho = comando() { bloco.add(filho); } )*
+    t = < FECHABLOCO >    { bloco.add(t); }
+    { return no; }
 }
