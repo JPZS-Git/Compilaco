@@ -2,13 +2,11 @@ package parser;
 
 import java.io.IOException;
 import java.io.StringReader;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.LinkedHashSet;
+import java.util.Comparator;
 import java.util.List;
-import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * Execução pelo terminal:
@@ -16,16 +14,16 @@ import java.util.regex.Pattern;
  *   java -cp out parser.Main [arquivo] [--arvore] [--debug]
  *
  * Sem o caminho do arquivo, abre um JFileChooser para escolher o código.
+ * Com "-" no lugar do arquivo, lê o código da entrada padrão (útil para testes
+ * rápidos no terminal, sem criar arquivo).
  * O arquivo é lido inteiro em UTF-8 e passado ao parser (sem cortar em fim_de_jogo).
  */
 public class Main {
 
-    private static final Pattern POSICAO_ERRO =
-            Pattern.compile("linha\\s+(\\d+),\\s*coluna\\s+(\\d+)");
-
     public static void main(String[] args) {
         boolean debug = false;
         boolean mostrarArvore = false;
+        boolean entradaPadrao = false;
         Path caminho = null;
 
         for (String arg : args) {
@@ -33,6 +31,8 @@ public class Main {
                 debug = true;
             } else if ("--arvore".equalsIgnoreCase(arg)) {
                 mostrarArvore = true;
+            } else if ("-".equals(arg)) {
+                entradaPadrao = true;
             } else if (caminho == null) {
                 caminho = Path.of(arg);
             }
@@ -42,6 +42,24 @@ public class Main {
 
         ArquivoFonte arquivo = new ArquivoFonte();
         String codigo;
+
+        if (entradaPadrao) {
+            try {
+                codigo = new String(System.in.readAllBytes(), StandardCharsets.UTF_8);
+            } catch (IOException e) {
+                imprimirErros(List.of(new ErroCompilacao(
+                        TipoErro.ENTRADA, 0, 0,
+                        "Não foi possível ler a entrada: " + e.getMessage()
+                )));
+                return;
+            }
+            if (!codigo.isEmpty() && codigo.charAt(0) == '\uFEFF') {
+                codigo = codigo.substring(1); // BOM
+            }
+            System.out.println("Código lido da entrada padrão.\n");
+            executar(codigo, debug, mostrarArvore);
+            return;
+        }
 
         try {
             if (caminho != null) {
@@ -73,56 +91,64 @@ public class Main {
             System.out.println("----------------------------------------");
             System.out.print(codigo);
             System.out.println("----------------------------------------");
+            imprimirTokens(codigo);
+            System.out.println("[DEBUG] Iniciando análise sintática...\n");
         }
 
-        List<ErroCompilacao> erros = new ArrayList<>();
+        List<ErroCompilacao> erros;
+        No arvore;
 
         try {
             // O texto vai como String (StringReader): assim o parser não depende
             // do charset padrão do sistema e os acentos chegam intactos.
-            Compilaco parser = new Compilaco(new StringReader(codigo));
+            Compilaco parser = Compilaco.criar(new StringReader(codigo));
+            arvore = parser.analisar();
+            erros = new ArrayList<>(parser.erros);
 
-            if (debug) {
-                imprimirTokens(parser);
-                parser.ReInit(new StringReader(codigo));
-                System.out.println("[DEBUG] Iniciando análise sintática...\n");
+            if (debug && !parser.rastro.isEmpty()) {
+                System.out.println("[DEBUG] Recuperação de erros (modo pânico):");
+                parser.rastro.forEach(System.out::println);
+                System.out.println();
             }
-
-            No arvore = parser.inicio();
-
-            System.out.println("\n[GOL] Análise léxica e sintática concluída sem erros!");
-            System.out.println("=> Fim de jogo! O código é sintaticamente válido.");
-
-            if (debug || mostrarArvore) {
-                System.out.println("\n[ARVORE SINTATICA]");
-                System.out.print(arvore.imprimir());
-            }
-
-        } catch (TokenMgrError e) {
-            erros.add(converterErroLexico(e));
-        } catch (ParseException e) {
-            erros.add(converterErroSintatico(e));
         } catch (RuntimeException e) {
-            erros.add(new ErroCompilacao(
-                    TipoErro.INTERNO,
-                    0,
-                    0,
+            imprimirErros(List.of(new ErroCompilacao(
+                    TipoErro.INTERNO, 0, 0,
                     "Erro interno do compilador: " + e.getMessage()
-            ));
+            )));
+            return;
         }
 
-        imprimirErros(erros);
+        // erros léxicos e sintáticos na ordem em que aparecem no código
+        erros.sort(Comparator.comparingInt(ErroCompilacao::linha)
+                .thenComparingInt(ErroCompilacao::coluna));
+
+        if (erros.isEmpty()) {
+            System.out.println("\n[GOL] Análise léxica e sintática concluída sem erros!");
+            System.out.println("=> Fim de jogo! O código é sintaticamente válido.");
+        } else {
+            imprimirErros(erros);
+        }
+
+        if (debug || mostrarArvore) {
+            System.out.println("\n[ARVORE SINTATICA]");
+            System.out.print(arvore.imprimir());
+        }
     }
 
-    private static void imprimirTokens(Compilaco parser) {
+    /** Lista os tokens (com um léxico separado, só para exibição). */
+    private static void imprimirTokens(String codigo) {
         System.out.println("[DEBUG] Tokens reconhecidos pelo lexer:");
 
+        List<ErroCompilacao> ignorados = new ArrayList<>();
+        LexicoComRecuperacao lexico = new LexicoComRecuperacao(
+                new SimpleCharStream(new StringReader(codigo)), ignorados);
+
         while (true) {
-            Token token = parser.token_source.getNextToken();
+            Token token = lexico.getNextToken();
 
             String nome = token.kind >= 0 &&
-                    token.kind < Compilaco.tokenImage.length
-                    ? Compilaco.tokenImage[token.kind]
+                    token.kind < CompilacoConstants.tokenImage.length
+                    ? CompilacoConstants.tokenImage[token.kind]
                     : String.valueOf(token.kind);
 
             String imagem = token.kind == CompilacoConstants.EOF
@@ -145,78 +171,13 @@ public class Main {
         System.out.println();
     }
 
-    private static ErroCompilacao converterErroLexico(TokenMgrError erro) {
-        int linha = 0;
-        int coluna = 0;
-
-        Matcher matcher = POSICAO_ERRO.matcher(erro.getMessage());
-
-        if (matcher.find()) {
-            linha = Integer.parseInt(matcher.group(1));
-            coluna = Integer.parseInt(matcher.group(2));
-        }
-
-        return new ErroCompilacao(
-                TipoErro.LEXICO,
-                linha,
-                coluna,
-                erro.getMessage()
-        );
-    }
-
-    /* ESSA VERSÃO DEVE SER APLICADA DEPOIS DE SER FEITA AS MODIFICAÇÕES NO JAVACC
-    private static ErroCompilacao converterErroLexico(TokenMgrError erro) {
-        return new ErroCompilacao(
-                TipoErro.LEXICO,
-                erro.getErrorLine(),
-                erro.getErrorColumn(),
-                erro.getMessage()
-        );
-    }
-     */
-
-    private static ErroCompilacao converterErroSintatico(ParseException erro) {
-        Token token = erro.currentToken != null
-                ? erro.currentToken.next
-                : null;
-
-        int linha = token != null ? token.beginLine : 0;
-        int coluna = token != null ? token.beginColumn : 0;
-
-        String encontrado = token == null
-                ? "desconhecido"
-                : token.kind == CompilacoConstants.EOF
-                  ? "<EOF>"
-                  : "'" + token.image + "'";
-
-        Set<String> esperados = new LinkedHashSet<>();
-
-        for (int[] sequencia : erro.expectedTokenSequences) {
-            if (sequencia.length > 0) {
-                esperados.add(Compilaco.tokenImage[sequencia[0]]);
-            }
-        }
-
-        String mensagem = "Token inesperado: " + encontrado + ".";
-
-        if (!esperados.isEmpty()) {
-            mensagem += " Esperado: " + String.join(", ", esperados) + ".";
-        }
-
-        return new ErroCompilacao(
-                TipoErro.SINTATICO,
-                linha,
-                coluna,
-                mensagem
-        );
-    }
-
     private static void imprimirErros(List<ErroCompilacao> erros) {
         if (erros.isEmpty()) {
             return;
         }
 
-        System.out.println("\n[VAR - RELATÓRIO DE ERROS]");
+        System.out.println("\n[FALTA GRAVE] O VAR encontrou " + erros.size()
+                + (erros.size() == 1 ? " erro:" : " erros:"));
 
         for (ErroCompilacao erro : erros) {
             String posicao = erro.linha() > 0

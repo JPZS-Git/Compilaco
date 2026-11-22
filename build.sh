@@ -12,6 +12,6 @@ mkdir -p "$OUTPUT"
 
 echo "Compilando projeto..."
 
-javac -encoding UTF-8 -d "$OUTPUT" "$SOURCE"/*.java
+javac -encoding UTF-8 -d "$OUTPUT" "$SOURCE"/*.java src/main/java/recovery/*.java
 
 echo "Compilacao concluida."

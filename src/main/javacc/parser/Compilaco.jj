@@ -6,9 +6,150 @@ options
 PARSER_BEGIN(Compilaco)
 package parser;
 
+import java.util.ArrayList;
+import java.util.List;
+import recovery.*;
+
 public class Compilaco
 {
+  /** Erros da compilação (léxicos e sintáticos), todos de uma vez. */
+  public List<ErroCompilacao> erros = new ArrayList<ErroCompilacao>();
 
+  /** Passo a passo da recuperação de erros (exibido com --debug). */
+  public final List<String> rastro = new ArrayList<String>();
+
+  /** Raiz da árvore; guardada para não perder a árvore parcial se o código acabar no meio de um erro. */
+  private No raiz;
+
+  /**
+   * Cria o parser já com o léxico que se recupera de erros
+   * (LexicoComRecuperacao). Léxico e parser gravam na mesma lista de erros.
+   */
+  public static Compilaco criar(java.io.Reader codigo)
+  {
+    List<ErroCompilacao> lista = new ArrayList<ErroCompilacao>();
+    Compilaco parser = new Compilaco(new LexicoComRecuperacao(new SimpleCharStream(codigo), lista));
+    parser.erros = lista;
+    return parser;
+  }
+
+  /**
+   * Analisa o programa inteiro e devolve a árvore sintática.
+   * Onde houve recuperação de erro, a árvore tem um nó "erro" no lugar
+   * do trecho descartado. Os erros ficam na lista "erros".
+   */
+  public No analisar()
+  {
+    try
+    {
+      return inicio();
+    }
+    catch (ParseEOFException e)
+    {
+      Token fim = getToken(1);
+      boolean jaRegistrado = false;
+      for (ErroCompilacao erro : erros)
+        if (erro.linha() == fim.beginLine && erro.coluna() == fim.beginColumn)
+          jaRegistrado = true;
+      if (!jaRegistrado)
+        erros.add(new ErroCompilacao(TipoErro.SINTATICO, fim.beginLine, fim.beginColumn,
+            "Fim do código inesperado: faltou o fechamento de um bloco ou o 'fim_de_jogo'."));
+      if (raiz == null) raiz = new No("inicio");
+      return raiz.add(No.erro("fim do código inesperado"));
+    }
+    catch (ParseException e)
+    {
+      erros.add(ErroCompilacao.sintatico(e));
+      return raiz != null ? raiz : No.erro("programa");
+    }
+  }
+
+  /** Nome legível de um tipo de token (ex.: "placar" em vez de "\"placar\""). */
+  static public String im(int x)
+  {
+    int k;
+    String s;
+    s = tokenImage[x];
+    k = s.lastIndexOf("\"");
+    try {
+      s = s.substring(1,k);
+    }
+    catch (StringIndexOutOfBoundsException e)
+    {}
+    return s;
+  }
+
+  Token lastError = null;
+  boolean eof;    // variável que indica se EOF foi alcançado
+
+  // o método abaixo consome tokens até alcançar um que pertença ao conjunto
+  // de sincronização (modo pânico)
+  void consumeUntil(RecoverySet g,
+                    ParseException e,
+                    String met) throws ParseEOFException,
+                                       ParseException
+  {
+    Token tok;
+    rastro.add("*** " + met + " ***");
+    rastro.add("     Conjunto de sincronização: " + g);
+
+    if (g == null) throw e; // se o conjunto é null, propaga a exceção
+
+    tok = getToken(1); // pega token corrente
+    while ( ! eof ) { // se não chegou ao fim do arquivo
+      if ( g.contains(tok.kind)) { // achou um token no conjunto
+        rastro.add("     Encontrado token de sincronização: " + im(tok.kind));
+        break;
+      }
+      rastro.add("     Ignorando o token: " + im(tok.kind));
+      getNextToken();     // pega próximo token
+      tok = getToken(1);
+      if (tok.kind == EOF && ! g.contains(EOF) ) // fim da entrada?
+        eof = true;
+    }
+    if ( tok != lastError ) { // evita mensagens em cascata
+      if ( ! causadoPorErroLexico(e) )
+        erros.add(ErroCompilacao.sintatico(e));
+      lastError = tok;
+    }
+    if ( eof )
+      throw new ParseEOFException("Encontrei EOF onde não deveria.");
+  }
+
+  /*
+   * Evita cascata entre léxico e sintático: se um símbolo inválido foi
+   * descartado logo antes do token inesperado (ex.: "2 @ 3", que chega ao
+   * parser como "2 3"), o erro sintático é só consequência do léxico e
+   * não é registrado de novo.
+   */
+  boolean causadoPorErroLexico(ParseException e)
+  {
+    Token antes = e.currentToken;
+    Token achado = (antes != null) ? antes.next : null;
+    if (antes == null || achado == null) return false;
+
+    for (ErroCompilacao erro : erros)
+    {
+      if (erro.tipo() != TipoErro.LEXICO) continue;
+      boolean depoisDoAnterior = erro.linha() > antes.endLine
+          || (erro.linha() == antes.endLine && erro.coluna() > antes.endColumn);
+      boolean antesDoAchado = erro.linha() < achado.beginLine
+          || (erro.linha() == achado.beginLine && erro.coluna() < achado.beginColumn);
+      if (depoisDoAnterior && antesDoAchado) return true;
+    }
+    return false;
+  }
+
+  /* Monta uma ParseException "esperava um destes tokens" a partir de um conjunto. */
+  ParseException erroEsperando(RecoverySet esperados)
+  {
+    java.util.TreeSet<Integer> ordenados = new java.util.TreeSet<Integer>(esperados);
+    int[][] sequencias = new int[ordenados.size()][];
+    int i = 0;
+    for (Integer k : ordenados)
+      sequencias[i++] = new int[] { k.intValue() };
+    return new ParseException(token, sequencias, tokenImage);
+  }
 }
 PARSER_END(Compilaco)
 
@@ -67,35 +208,77 @@ TOKEN :
  *     em que aparecem (ex.: termo -> fator, *, fator).
  */
 
-No inicio() :
-{ No no = new No("inicio"); Token t; No filho; }
+/*
+ * MODO PÂNICO (recuperação de erros)
+ *
+ * As regras abaixo envolvem a sua parte em try/catch. Ao encontrar um erro,
+ * o catch chama consumeUntil(g, e, "regra"), que registra o erro e descarta
+ * tokens até achar um do conjunto de sincronização g (classe Follow).
+ * Em seguida a regra devolve um nó "erro" no lugar do trecho descartado,
+ * e a análise continua: todos os erros aparecem numa única compilação.
+ */
+
+No inicio() throws ParseEOFException :
+{ No no = new No("inicio"); Token t; No filho; raiz = no; }
 {
-  t = < ABREMAIN >   { no.add(t); }
-  t = < ABREPAREN >  { no.add(t); }
-  t = < FECHAPAREN > { no.add(t); }
+  try {
+    t = < ABREMAIN >   { no.add(t); }
+    t = < ABREPAREN >  { no.add(t); }
+    t = < FECHAPAREN > { no.add(t); }
+  }
+  catch (ParseException e) {
+    consumeUntil(Follow.cabecalho, e, "inicio (apito_inicial)");
+    no.add(No.erro("cabeçalho descartado"));
+  }
     ( filho = comando() { no.add(filho); } )*
-  t = < FECHAMAIN >  { no.add(t); }
-  < EOF >
+  try {
+    t = < FECHAMAIN >  { no.add(t); }
+    < EOF >
+  }
+  catch (ParseException e) {
+    // token fora de lugar no nível do programa (ex.: "}" sobrando):
+    // descarta o trecho e retoma a análise dos comandos seguintes
+    while (true) {
+      consumeUntil(Follow.programa, e, "inicio (fim_de_jogo)");
+      no.add(No.erro("trecho descartado"));
+      while (First.comando.contains(getToken(1).kind))
+        no.add(comando());
+      boolean fechou = false;
+      if (getToken(1).kind == FECHAMAIN) {
+        no.add(getNextToken());
+        fechou = true;
+      }
+      if (getToken(1).kind == EOF)
+        break;
+      // depois do fim_de_jogo só pode vir o fim do arquivo
+      e = erroEsperando(fechou ? new RecoverySet(EOF) : Follow.programa);
+    }
+  }
   { return no; }
 }
 
 /*
- * Quando o modo pânico for implementado, o catch deste comando deve devolver
- * um nó de erro no lugar do comando descartado, ex.:
- *   return no.add(No.erro("comando descartado"));
- * Assim a árvore continua sendo montada mesmo com erro.
+ * Ponto principal de sincronização: um erro em qualquer comando (declaração,
+ * atribuição, if, while, for) é tratado aqui. O conjunto de sincronização é
+ * Follow(comando): o início do próximo comando, "}" ou "fim_de_jogo".
  */
-No comando() :
-{ No no = new No("comando"); No filho; }
+No comando() throws ParseEOFException :
+{ No no = new No("comando"); No filho; RecoverySet g = Follow.comando; }
 {
-  (
-      filho = declaraVar()
-    | filho = atribuicaoIsolada()
-    | filho = comandoIf()
-    | filho = comandoWhile()
-    | filho = comandoFor()
-  )
-  { return no.add(filho); }
+  try {
+    (
+        filho = declaraVar()
+      | filho = atribuicaoIsolada()
+      | filho = comandoIf()
+      | filho = comandoWhile()
+      | filho = comandoFor()
+    )
+    { return no.add(filho); }
+  }
+  catch (ParseException e) {
+    consumeUntil(g, e, "comando");
+    return no.add(No.erro("comando descartado"));
+  }
 }
 
 No tipoDado() :
@@ -197,13 +380,19 @@ No declaraVar() :
  */
 
 /* Estrutura Condicional (If / Else) */
-No comandoIf() :
+No comandoIf() throws ParseEOFException :
 { No no = new No("comandoIf"); No bloco; Token t; No filho; }
 {
     t = < IF >          { no.add(t); }
-    t = < ABREPAREN >   { no.add(t); }
-    filho = expressao() { no.add(filho); }
-    t = < FECHAPAREN >  { no.add(t); }
+    try {
+      t = < ABREPAREN >   { no.add(t); }
+      filho = expressao() { no.add(filho); }
+      t = < FECHAPAREN >  { no.add(t); }
+    }
+    catch (ParseException e) {
+      consumeUntil(Follow.condicao, e, "comandoIf (condição)");
+      no.add(No.erro("condição descartada"));
+    }
     t = < ABREBLOCO >   { bloco = new No("bloco").add(t); no.add(bloco); }
       ( filho = comando() { bloco.add(filho); } )*
     t = < FECHABLOCO >  { bloco.add(t); }
@@ -218,13 +407,19 @@ No comandoIf() :
 }
 
 /* Laço 1 (While) */
-No comandoWhile() :
+No comandoWhile() throws ParseEOFException :
 { No no = new No("comandoWhile"); No bloco; Token t; No filho; }
 {
     t = < WHILE >       { no.add(t); }
-    t = < ABREPAREN >   { no.add(t); }
-    filho = expressao() { no.add(filho); }
-    t = < FECHAPAREN >  { no.add(t); }
+    try {
+      t = < ABREPAREN >   { no.add(t); }
+      filho = expressao() { no.add(filho); }
+      t = < FECHAPAREN >  { no.add(t); }
+    }
+    catch (ParseException e) {
+      consumeUntil(Follow.condicao, e, "comandoWhile (condição)");
+      no.add(No.erro("condição descartada"));
+    }
     t = < ABREBLOCO >   { bloco = new No("bloco").add(t); no.add(bloco); }
       ( filho = comando() { bloco.add(filho); } )*
     t = < FECHABLOCO >  { bloco.add(t); }
@@ -232,22 +427,28 @@ No comandoWhile() :
 }
 
 /* Laço 2 (For) */
-No comandoFor() :
+No comandoFor() throws ParseEOFException :
 { No no = new No("comandoFor"); No bloco; Token t; No filho; }
 {
     t = < FOR >           { no.add(t); }
-    t = < ABREPAREN >     { no.add(t); }
-    filho = tipoDado()    { no.add(filho); }
-    t = < IDENTIFICADOR > { no.add(t); }
-    t = < ATRIBUICAO >    { no.add(t); }
-    filho = valor()       { no.add(filho); }
-    t = < FIMINSTRUCT >   { no.add(t); }
-    filho = expressao()   { no.add(filho); }
-    t = < FIMINSTRUCT >   { no.add(t); }
-    t = < IDENTIFICADOR > { no.add(t); }
-    t = < ATRIBUICAO >    { no.add(t); }
-    filho = expressao()   { no.add(filho); }
-    t = < FECHAPAREN >    { no.add(t); }
+    try {
+      t = < ABREPAREN >     { no.add(t); }
+      filho = tipoDado()    { no.add(filho); }
+      t = < IDENTIFICADOR > { no.add(t); }
+      t = < ATRIBUICAO >    { no.add(t); }
+      filho = valor()       { no.add(filho); }
+      t = < FIMINSTRUCT >   { no.add(t); }
+      filho = expressao()   { no.add(filho); }
+      t = < FIMINSTRUCT >   { no.add(t); }
+      t = < IDENTIFICADOR > { no.add(t); }
+      t = < ATRIBUICAO >    { no.add(t); }
+      filho = expressao()   { no.add(filho); }
+      t = < FECHAPAREN >    { no.add(t); }
+    }
+    catch (ParseException e) {
+      consumeUntil(Follow.condicao, e, "comandoFor (cabeçalho)");
+      no.add(No.erro("cabeçalho descartado"));
+    }
     t = < ABREBLOCO >     { bloco = new No("bloco").add(t); no.add(bloco); }
       ( filho = comando() { bloco.add(filho); } )*
     t = < FECHABLOCO >    { bloco.add(t); }

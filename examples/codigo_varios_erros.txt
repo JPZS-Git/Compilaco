@@ -1,0 +1,8 @@
+apito_inicial()
+placar a = 1
+placar b = 2 @ 3;
+placar c = (4 + 5;
+var_analisa (a < ) {
+  a = a + 1;
+}
+fim_de_jogo
