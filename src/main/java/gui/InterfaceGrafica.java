@@ -42,7 +42,6 @@ import javax.swing.JSplitPane;
 import javax.swing.JTabbedPane;
 import javax.swing.JTable;
 import javax.swing.JTextArea;
-import javax.swing.JToolBar;
 import javax.swing.JTree;
 import javax.swing.KeyStroke;
 import javax.swing.ListSelectionModel;
@@ -88,9 +87,9 @@ public class InterfaceGrafica extends JFrame {
 
     private static final String MODELO = "apito_inicial()\n\n\n\nfim_de_jogo\n";
 
-    private static final Color VERDE = new Color(0x1E7D32);
-    private static final Color VERMELHO = new Color(0xB00020);
-    private static final Color CINZA = new Color(0x6B6B6B);
+    private static final Color VERDE = Tema.SUCESSO;
+    private static final Color VERMELHO = Tema.ERRO;
+    private static final Color LARANJA = Tema.AVISO;
 
     private static final int ABA_TOKENS = 0;
     private static final int ABA_ERROS = 1;
@@ -105,6 +104,12 @@ public class InterfaceGrafica extends JFrame {
     private boolean modificado = false;
 
     private final JTextArea editor = new JTextArea() {
+        /** Editor com cores no código e destaque da linha atual. */
+        @Override
+        public void updateUI() {
+            setUI(new EditorColorido());
+        }
+
         /** Ao parar o mouse sobre uma linha com erro, mostra a mensagem. */
         @Override
         public String getToolTipText(MouseEvent e) {
@@ -136,7 +141,9 @@ public class InterfaceGrafica extends JFrame {
     private final JTabbedPane abas = new JTabbedPane();
 
     private final JLabel status = new JLabel();
-    private final JLabel resultado = new JLabel();
+    private final Componentes.Pilula resultado = new Componentes.Pilula();
+    private final Componentes.Pilula pilulaTokens = new Componentes.Pilula();
+    private final Componentes.Pilula pilulaErros = new Componentes.Pilula();
 
     /** Nome de cada tipo de token, como na gramática (TIPOINT, IDENTIFICADOR...). */
     private static final Map<Integer, String> NOMES_TOKENS = nomesDosTokens();
@@ -158,9 +165,11 @@ public class InterfaceGrafica extends JFrame {
         divisao.setResizeWeight(0.55);
         divisao.setDividerLocation(640);
         divisao.setBorder(null);
+        divisao.setDividerSize(6);
 
         JPanel conteudo = new JPanel(new BorderLayout());
-        conteudo.add(barraDeFerramentas(), BorderLayout.NORTH);
+        conteudo.setBackground(Tema.FUNDO);
+        conteudo.add(cabecalho(), BorderLayout.NORTH);
         conteudo.add(divisao, BorderLayout.CENTER);
         conteudo.add(barraDeStatus(), BorderLayout.SOUTH);
         setContentPane(conteudo);
@@ -183,9 +192,14 @@ public class InterfaceGrafica extends JFrame {
     // ------------------------------------------------------------------
 
     private void montarEditor() {
-        editor.setFont(fonteMonoespacada(15));
+        editor.setFont(Tema.fonteCodigo(15));
+        editor.setBackground(Tema.EDITOR_FUNDO);
+        editor.setForeground(Tema.TEXTO);
+        editor.setSelectionColor(Tema.SELECAO);
+        editor.setSelectedTextColor(Tema.TEXTO);
+        editor.setCaretColor(Tema.GRAMADO);
         editor.setTabSize(4);
-        editor.setMargin(new java.awt.Insets(4, 8, 4, 8));
+        editor.setBorder(BorderFactory.createEmptyBorder(6, 10, 6, 10));
         numeracao.setFont(editor.getFont());
         ToolTipManager.sharedInstance().registerComponent(editor);
 
@@ -215,8 +229,16 @@ public class InterfaceGrafica extends JFrame {
     }
 
     private void montarAbas() {
+        Componentes.abasPlanas(abas);
         configurarTabela(tabelaTokens, 45, 160, 160, 55, 60);
         configurarTabela(tabelaErros, 95, 50, 60, 600);
+        tabelaErros.getColumnModel().getColumn(0).setCellRenderer(new RenderizadorTipoErro());
+        fixarLargura(tabelaTokens, 0, 50);
+        fixarLargura(tabelaTokens, 3, 60);
+        fixarLargura(tabelaTokens, 4, 65);
+        fixarLargura(tabelaErros, 0, 115);
+        fixarLargura(tabelaErros, 1, 60);
+        fixarLargura(tabelaErros, 2, 65);
         tabelaErros.getSelectionModel().addListSelectionListener(e -> {
             int linha = tabelaErros.getSelectedRow();
             if (!e.getValueIsAdjusting() && linha >= 0) {
@@ -232,17 +254,20 @@ public class InterfaceGrafica extends JFrame {
         detalheErro.setWrapStyleWord(true);
         detalheErro.setRows(3);
         detalheErro.setMargin(new java.awt.Insets(6, 8, 6, 8));
-        detalheErro.setBackground(new Color(0xFFF6F6));
+        detalheErro.setBackground(new Color(0xFFF5F5));
+        detalheErro.setForeground(Tema.TEXTO);
+        detalheErro.setFont(Tema.fonteInterface(Font.PLAIN, 13));
         detalheErro.setText("Clique num erro para ver a mensagem completa e ir até a linha no editor.");
 
         arvore.setCellRenderer(new RenderizadorArvore());
-        arvore.setFont(fonteMonoespacada(13));
-        arvore.setRowHeight(0);
+        arvore.setFont(Tema.fonteCodigo(13));
+        arvore.setRowHeight(22);
+        arvore.setBorder(BorderFactory.createEmptyBorder(6, 6, 6, 6));
 
         passosPanico.setEditable(false);
         passosPanico.setLineWrap(true);
         passosPanico.setWrapStyleWord(true);
-        passosPanico.setFont(fonteMonoespacada(13));
+        passosPanico.setFont(Tema.fonteCodigo(13));
         passosPanico.setMargin(new java.awt.Insets(6, 8, 6, 8));
         passosPanico.setText("Compile o código (F5). Se houver erros, aqui aparece como o modo pânico se recuperou de cada um.");
 
@@ -255,11 +280,13 @@ public class InterfaceGrafica extends JFrame {
         abas.addTab("Modo pânico", new JScrollPane(passosPanico));
 
         codigoC.setEditable(false);
-        codigoC.setFont(fonteMonoespacada(13));
-        codigoC.setMargin(new java.awt.Insets(6, 8, 6, 8));
+        codigoC.setUI(new EditorColorido());
+        codigoC.setFont(Tema.fonteCodigo(13));
+        codigoC.setBackground(Tema.EDITOR_FUNDO);
+        codigoC.setBorder(BorderFactory.createEmptyBorder(6, 10, 6, 10));
         saidaC.setEditable(false);
         saidaC.setLineWrap(true);
-        saidaC.setFont(fonteMonoespacada(13));
+        saidaC.setFont(Tema.fonteCodigo(13));
         saidaC.setMargin(new java.awt.Insets(6, 8, 6, 8));
         saidaC.setBackground(new Color(0x1E1E1E));
         saidaC.setForeground(new Color(0xE6E6E6));
@@ -267,8 +294,11 @@ public class InterfaceGrafica extends JFrame {
         limparCodigoC();
 
         JPanel painelC = new JPanel(new BorderLayout());
-        JLabel tituloSaida = new JLabel("  Compilação com gcc e execução do programa");
-        tituloSaida.setBorder(BorderFactory.createEmptyBorder(4, 0, 4, 0));
+        JLabel tituloSaida = new JLabel("Compilação com gcc e execução do programa");
+        tituloSaida.setIcon(Icones.de(Icones.Tipo.EXECUTAVEL, 14, Tema.TEXTO_SUAVE));
+        tituloSaida.setForeground(Tema.TEXTO_SUAVE);
+        tituloSaida.setFont(Tema.fonteInterface(Font.BOLD, 12));
+        tituloSaida.setBorder(BorderFactory.createEmptyBorder(6, 10, 6, 10));
         JPanel painelSaida = new JPanel(new BorderLayout());
         painelSaida.add(tituloSaida, BorderLayout.NORTH);
         painelSaida.add(new JScrollPane(saidaC), BorderLayout.CENTER);
@@ -279,19 +309,45 @@ public class InterfaceGrafica extends JFrame {
         abas.addTab("Código C", painelC);
     }
 
-    private JToolBar barraDeFerramentas() {
-        JToolBar barra = new JToolBar();
-        barra.setFloatable(false);
-        barra.add(new JButton(acaoNovo));
-        barra.add(new JButton(acaoAbrir));
-        barra.add(new JButton(acaoSalvar));
-        barra.add(new JButton(acaoSalvarComo));
-        barra.addSeparator();
-        JButton compilar = new JButton(acaoCompilar);
-        compilar.setFont(compilar.getFont().deriveFont(Font.BOLD));
-        barra.add(compilar);
-        barra.add(new JButton(acaoExecutavel));
-        return barra;
+    /** Cabeçalho verde com o nome do compilador e os botões. */
+    private JPanel cabecalho() {
+        JLabel titulo = new JLabel("Compilaço");
+        titulo.setIcon(Icones.de(Icones.Tipo.BOLA, 30, Color.WHITE));
+        titulo.setIconTextGap(10);
+        titulo.setForeground(Color.WHITE);
+        titulo.setFont(Tema.fonteInterface(Font.BOLD, 22));
+
+        JLabel subtitulo = new JLabel("compilador da linguagem do futebol");
+        subtitulo.setForeground(new Color(0xB9DDB2));
+        subtitulo.setFont(Tema.fonteInterface(Font.PLAIN, 12));
+        subtitulo.setBorder(BorderFactory.createEmptyBorder(0, 40, 0, 0));
+
+        JPanel marca = new JPanel();
+        marca.setOpaque(false);
+        marca.setLayout(new javax.swing.BoxLayout(marca, javax.swing.BoxLayout.Y_AXIS));
+        marca.add(titulo);
+        marca.add(subtitulo);
+
+        JPanel botoes = new JPanel(new java.awt.FlowLayout(java.awt.FlowLayout.RIGHT, 4, 0));
+        botoes.setOpaque(false);
+        botoes.add(Componentes.botaoCabecalho(acaoNovo, "Novo", "Novo código (Ctrl+N)", Icones.Tipo.NOVO));
+        botoes.add(Componentes.botaoCabecalho(acaoAbrir, "Abrir", "Abrir arquivo (Ctrl+O)", Icones.Tipo.ABRIR));
+        botoes.add(Componentes.botaoCabecalho(acaoSalvar, "Salvar", "Salvar (Ctrl+S)", Icones.Tipo.SALVAR));
+        botoes.add(Componentes.botaoCabecalho(acaoSalvarComo, "Salvar como", "Salvar como (Ctrl+Shift+S)", Icones.Tipo.SALVAR_COMO));
+        botoes.add(javax.swing.Box.createHorizontalStrut(14));
+        botoes.add(Componentes.botaoCabecalho(acaoCompilar, "Compilar", "Compilar o código (F5)", Icones.Tipo.COMPILAR, Tema.DESTAQUE));
+        botoes.add(javax.swing.Box.createHorizontalStrut(8));
+        botoes.add(Componentes.botaoCabecalho(acaoExecutavel, "Gerar executável", "Traduzir para C e gerar o executável com gcc (F6)", Icones.Tipo.EXECUTAVEL, Color.WHITE));
+
+        JPanel cabecalho = new JPanel(new BorderLayout());
+        cabecalho.setBackground(Tema.GRAMADO);
+        cabecalho.setBorder(BorderFactory.createEmptyBorder(10, 16, 10, 12));
+        cabecalho.add(marca, BorderLayout.WEST);
+        JPanel centralizar = new JPanel(new java.awt.GridBagLayout());
+        centralizar.setOpaque(false);
+        centralizar.add(botoes);
+        cabecalho.add(centralizar, BorderLayout.EAST);
+        return cabecalho;
     }
 
     private JMenuBar menu() {
@@ -313,16 +369,27 @@ public class InterfaceGrafica extends JFrame {
         return barra;
     }
 
+    /** Barra de baixo: linhas e cursor à esquerda; placar (tokens, erros, resultado) à direita. */
     private JPanel barraDeStatus() {
-        status.setBorder(BorderFactory.createEmptyBorder(4, 10, 4, 10));
-        resultado.setOpaque(true);
-        resultado.setFont(resultado.getFont().deriveFont(Font.BOLD));
-        resultado.setBorder(BorderFactory.createEmptyBorder(4, 14, 4, 14));
+        status.setForeground(Tema.TEXTO_SUAVE);
+        status.setFont(Tema.fonteInterface(Font.PLAIN, 12));
+        status.setBorder(BorderFactory.createEmptyBorder(0, 14, 0, 0));
+        pilulaTokens.contornar("0 tokens", Tema.NEUTRO);
+        pilulaErros.contornar("0 erros", Tema.NEUTRO);
+
+        JPanel placar = new JPanel(new java.awt.FlowLayout(java.awt.FlowLayout.RIGHT, 6, 0));
+        placar.setOpaque(false);
+        placar.add(pilulaTokens);
+        placar.add(pilulaErros);
+        placar.add(resultado);
 
         JPanel barra = new JPanel(new BorderLayout());
-        barra.setBorder(BorderFactory.createMatteBorder(1, 0, 0, 0, new Color(0xD0D0D0)));
+        barra.setBackground(Tema.PAINEL);
+        barra.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(1, 0, 0, 0, Tema.BORDA),
+                BorderFactory.createEmptyBorder(6, 0, 6, 10)));
         barra.add(status, BorderLayout.WEST);
-        barra.add(resultado, BorderLayout.EAST);
+        barra.add(placar, BorderLayout.EAST);
         return barra;
     }
 
@@ -460,11 +527,10 @@ public class InterfaceGrafica extends JFrame {
                 .collect(Collectors.toSet()));
 
         if (erros.isEmpty()) {
-            mostrarResultado("GOL! Código aceito: análise léxica e sintática sem erros", VERDE);
+            mostrarResultado("GOL! Código aceito", VERDE);
             abas.setSelectedIndex(ABA_ARVORE);
         } else {
-            mostrarResultado("FALTA GRAVE: código não aceito. O VAR encontrou "
-                    + erros.size() + (erros.size() == 1 ? " erro" : " erros"), VERMELHO);
+            mostrarResultado("FALTA GRAVE! Código não aceito", VERMELHO);
             abas.setSelectedIndex(ABA_ERROS);
         }
         return erros.isEmpty();
@@ -563,7 +629,7 @@ public class InterfaceGrafica extends JFrame {
                 if (gerou) {
                     mostrarResultado("GOL! Código aceito e executável gerado", VERDE);
                 } else {
-                    mostrarResultado("GOL no Compilaço, mas o executável não foi gerado (veja a aba Código C)", new Color(0xB26A00));
+                    mostrarResultado("GOL, mas o executável não foi gerado (veja a aba Código C)", LARANJA);
                 }
             }
         }.execute();
@@ -603,6 +669,7 @@ public class InterfaceGrafica extends JFrame {
             });
         }
         abas.setTitleAt(ABA_TOKENS, "Tokens (" + n + ")");
+        pilulaTokens.contornar(n + (n == 1 ? " token" : " tokens"), Tema.NEUTRO);
     }
 
     private void mostrarErros(List<ErroCompilacao> erros) {
@@ -613,6 +680,11 @@ public class InterfaceGrafica extends JFrame {
             });
         }
         abas.setTitleAt(ABA_ERROS, "Erros (" + erros.size() + ")");
+        if (erros.isEmpty()) {
+            pilulaErros.contornar("0 erros", Tema.SUCESSO);
+        } else {
+            pilulaErros.preencher(erros.size() + (erros.size() == 1 ? " erro" : " erros"), null, Tema.ERRO);
+        }
         detalheErro.setText(erros.isEmpty()
                 ? "Nenhum erro: o código foi aceito."
                 : "Clique num erro para ver a mensagem completa e ir até a linha no editor.");
@@ -653,6 +725,8 @@ public class InterfaceGrafica extends JFrame {
         modeloErros.setRowCount(0);
         detalheErro.setText("Clique num erro para ver a mensagem completa e ir até a linha no editor.");
         abas.setTitleAt(ABA_TOKENS, "Tokens");
+        pilulaTokens.contornar("0 tokens", Tema.NEUTRO);
+        pilulaErros.contornar("0 erros", Tema.NEUTRO);
         abas.setTitleAt(ABA_ERROS, "Erros");
         arvore.setModel(new DefaultTreeModel(new DefaultMutableTreeNode("Compile o código (F5) para ver a árvore")));
         passosPanico.setText("Compile o código (F5). Se houver erros, aqui aparece como o modo pânico se recuperou de cada um.");
@@ -670,7 +744,7 @@ public class InterfaceGrafica extends JFrame {
             modificado = true;
             atualizarTitulo();
         }
-        if (!errosAtuais.isEmpty() || resultado.getBackground().equals(VERDE)) {
+        if (!errosAtuais.isEmpty() || resultado.getCorFundo().equals(VERDE)) {
             mostrarResultadoPendente("Código alterado: compile de novo (F5)");
         }
         SwingUtilities.invokeLater(this::atualizarStatus);
@@ -686,7 +760,7 @@ public class InterfaceGrafica extends JFrame {
         } catch (BadLocationException e) {
             // mantém 1:1
         }
-        status.setText("Linhas de código: " + contarLinhas() + "     Linha " + linha + ", coluna " + coluna);
+        status.setText("Linhas de código: " + contarLinhas() + "   ·   Linha " + linha + ", coluna " + coluna);
     }
 
     /** Linhas do código; a quebra de linha no fim do arquivo não conta como linha nova. */
@@ -704,15 +778,11 @@ public class InterfaceGrafica extends JFrame {
     }
 
     private void mostrarResultado(String texto, Color cor) {
-        resultado.setText(texto);
-        resultado.setForeground(Color.WHITE);
-        resultado.setBackground(cor);
+        resultado.preencher(texto, cor.equals(VERMELHO) ? null : Icones.de(Icones.Tipo.BOLA, 14, Color.WHITE), cor);
     }
 
     private void mostrarResultadoPendente(String texto) {
-        resultado.setText(texto);
-        resultado.setForeground(Color.WHITE);
-        resultado.setBackground(CINZA);
+        resultado.preencher(texto, null, Tema.NEUTRO);
     }
 
     /** Leva o cursor do editor até a posição de um erro. */
@@ -780,22 +850,23 @@ public class InterfaceGrafica extends JFrame {
     private static void configurarTabela(JTable tabela, int... larguras) {
         tabela.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         tabela.setFillsViewportHeight(true);
-        tabela.setRowHeight(22);
+        tabela.setRowHeight(26);
+        tabela.setShowGrid(false);
+        tabela.setIntercellSpacing(new Dimension(0, 0));
+        tabela.setFont(Tema.fonteInterface(Font.PLAIN, 13));
+        tabela.getTableHeader().setFont(Tema.fonteInterface(Font.BOLD, 12));
         tabela.getTableHeader().setReorderingAllowed(false);
         for (int i = 0; i < larguras.length; i++) {
             tabela.getColumnModel().getColumn(i).setPreferredWidth(larguras[i]);
         }
     }
 
-    private static Font fonteMonoespacada(int tamanho) {
-        List<String> disponiveis = Arrays.asList(
-                GraphicsEnvironment.getLocalGraphicsEnvironment().getAvailableFontFamilyNames());
-        for (String nome : new String[] { "Consolas", "JetBrains Mono", "DejaVu Sans Mono", "Courier New" }) {
-            if (disponiveis.contains(nome)) {
-                return new Font(nome, Font.PLAIN, tamanho);
-            }
-        }
-        return new Font(Font.MONOSPACED, Font.PLAIN, tamanho);
+    /** Coluna de largura fixa (o espaço que sobra fica para as colunas de texto). */
+    private static void fixarLargura(JTable tabela, int coluna, int largura) {
+        javax.swing.table.TableColumn c = tabela.getColumnModel().getColumn(coluna);
+        c.setMinWidth(largura);
+        c.setMaxWidth(largura);
+        c.setPreferredWidth(largura);
     }
 
     private static String escapar(String texto) {
@@ -822,24 +893,54 @@ public class InterfaceGrafica extends JFrame {
         return a;
     }
 
-    /** Árvore: nós de erro em vermelho, tokens (folhas) em azul. */
+    /**
+     * Árvore: cada tipo de nó com seu ícone — regras da gramática (cinza),
+     * tokens (azul) e erros (vermelho).
+     */
     private static class RenderizadorArvore extends DefaultTreeCellRenderer {
+        private static final javax.swing.Icon REGRA = Icones.de(Icones.Tipo.REGRA, 16, Tema.TEXTO_SUAVE);
+        private static final javax.swing.Icon TOKEN = Icones.de(Icones.Tipo.TOKEN, 16, Tema.COR_PALAVRA);
+        private static final javax.swing.Icon ERRO = Icones.de(Icones.Tipo.ERRO, 16, Tema.ERRO);
+
         @Override
         public Component getTreeCellRendererComponent(JTree arvore, Object valor, boolean selecionado,
                 boolean expandido, boolean folha, int linha, boolean foco) {
             super.getTreeCellRendererComponent(arvore, valor, selecionado, expandido, folha, linha, foco);
+            setIconTextGap(6);
             Object conteudo = ((DefaultMutableTreeNode) valor).getUserObject();
             if (conteudo instanceof No no) {
                 if (no.isErro()) {
-                    setForeground(VERMELHO);
+                    setIcon(ERRO);
+                    setForeground(selecionado ? Color.WHITE : VERMELHO);
                     setFont(arvore.getFont().deriveFont(Font.BOLD));
                 } else if (no.getToken() != null) {
-                    setForeground(selecionado ? getTextSelectionColor() : new Color(0x1A4F9C));
+                    setIcon(TOKEN);
+                    setForeground(selecionado ? Color.WHITE : Tema.COR_PALAVRA);
                     setFont(arvore.getFont());
                 } else {
+                    setIcon(REGRA);
+                    setForeground(selecionado ? Color.WHITE : Tema.TEXTO);
                     setFont(arvore.getFont());
                 }
+            } else {
+                setIcon(null);
+                setForeground(Tema.TEXTO_SUAVE);
             }
+            return this;
+        }
+    }
+
+    /** Coluna "Tipo" dos erros: léxico em laranja, sintático em vermelho. */
+    private static class RenderizadorTipoErro extends javax.swing.table.DefaultTableCellRenderer {
+        @Override
+        public Component getTableCellRendererComponent(JTable tabela, Object valor, boolean selecionado,
+                boolean foco, int linha, int coluna) {
+            super.getTableCellRendererComponent(tabela, valor, selecionado, foco, linha, coluna);
+            setFont(tabela.getFont().deriveFont(Font.BOLD));
+            if (!selecionado) {
+                setForeground("Léxico".equals(valor) ? LARANJA : VERMELHO);
+            }
+            setIcon(Icones.de(Icones.Tipo.ERRO, 13, selecionado ? Color.WHITE : ("Léxico".equals(valor) ? LARANJA : VERMELHO)));
             return this;
         }
     }
@@ -849,11 +950,7 @@ public class InterfaceGrafica extends JFrame {
     // ------------------------------------------------------------------
 
     public static void main(String[] args) {
-        try {
-            UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
-        } catch (Exception e) {
-            // segue com a aparência padrão do Java
-        }
+        Tema.instalar();
         SwingUtilities.invokeLater(() -> {
             InterfaceGrafica janela = new InterfaceGrafica();
             if (args.length > 0) {

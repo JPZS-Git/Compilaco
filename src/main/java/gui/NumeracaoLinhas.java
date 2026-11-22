@@ -26,11 +26,12 @@ import javax.swing.text.BadLocationException;
  */
 public class NumeracaoLinhas extends JComponent implements DocumentListener {
 
-    private static final Color FUNDO = new Color(0xF3F3F3);
-    private static final Color NUMERO = new Color(0x8A8A8A);
-    private static final Color FUNDO_ERRO = new Color(0xF8C9C9);
-    private static final Color NUMERO_ERRO = new Color(0xB00020);
-    private static final Color BORDA = new Color(0xDDDDDD);
+    private static final Color FUNDO = Tema.FUNDO;
+    private static final Color NUMERO = new Color(0xA3ADA2);
+    private static final Color NUMERO_ATUAL = Tema.TEXTO;
+    private static final Color FUNDO_ERRO = new Color(0xF8D0D0);
+    private static final Color NUMERO_ERRO = Tema.ERRO;
+    private static final Color BORDA = Tema.BORDA;
 
     private final JTextArea editor;
     private Set<Integer> linhasComErro = Set.of();
@@ -39,6 +40,7 @@ public class NumeracaoLinhas extends JComponent implements DocumentListener {
         this.editor = editor;
         setFont(editor.getFont());
         editor.getDocument().addDocumentListener(this);
+        editor.addCaretListener(e -> repaint()); // destaca o número da linha atual
     }
 
     /** Define as linhas (contadas a partir de 1) que devem aparecer marcadas. */
@@ -51,7 +53,7 @@ public class NumeracaoLinhas extends JComponent implements DocumentListener {
     public Dimension getPreferredSize() {
         FontMetrics fm = getFontMetrics(getFont());
         int digitos = Math.max(3, String.valueOf(editor.getLineCount()).length());
-        int largura = fm.charWidth('0') * digitos + 18;
+        int largura = fm.charWidth('0') * digitos + 24;
         return new Dimension(largura, editor.getPreferredSize().height);
     }
 
@@ -72,6 +74,7 @@ public class NumeracaoLinhas extends JComponent implements DocumentListener {
         Font negrito = normal.deriveFont(Font.BOLD);
 
         try {
+            int linhaAtual = editor.getLineOfOffset(editor.getCaretPosition());
             int primeira = editor.getLineOfOffset(editor.viewToModel2D(new Point(0, area.y)));
             int ultima = editor.getLineOfOffset(editor.viewToModel2D(new Point(0, area.y + area.height)));
 
@@ -89,10 +92,11 @@ public class NumeracaoLinhas extends JComponent implements DocumentListener {
                     g2.fillRect(0, y, getWidth() - 1, altura);
                 }
 
+                boolean atual = linha == linhaAtual;
                 String numero = String.valueOf(linha + 1);
-                g2.setFont(erro ? negrito : normal);
-                g2.setColor(erro ? NUMERO_ERRO : NUMERO);
-                int x = getWidth() - 9 - g2.getFontMetrics().stringWidth(numero);
+                g2.setFont(erro || atual ? negrito : normal);
+                g2.setColor(erro ? NUMERO_ERRO : atual ? NUMERO_ATUAL : NUMERO);
+                int x = getWidth() - 12 - g2.getFontMetrics().stringWidth(numero);
                 g2.drawString(numero, x, y + altura - fm.getDescent());
             }
         } catch (BadLocationException e) {

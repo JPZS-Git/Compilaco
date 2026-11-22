@@ -34,6 +34,10 @@ Compilaco-generico/
 │       │   │   └── CompiladorC.java           (chama o gcc e roda o executável)
 │       │   ├── gui/                           (interface gráfica)
 │       │   │   ├── InterfaceGrafica.java      (janela principal)
+│       │   │   ├── Tema.java                  (cores e fontes da identidade visual)
+│       │   │   ├── Componentes.java           (botões do cabeçalho, pílulas do placar, abas)
+│       │   │   ├── Icones.java                (ícones desenhados em código)
+│       │   │   ├── EditorColorido.java        (cores no código e linha atual)
 │       │   │   ├── NumeracaoLinhas.java       (numeração das linhas do editor)
 │       │   │   └── RealceErros.java           (realce das linhas com erro)
 │       │   └── recovery/                      (modo pânico)
@@ -74,13 +78,14 @@ java -cp out gui.InterfaceGrafica [arquivo]
 
 A janela tem:
 
-- **Editor** com o código sendo elaborado, numeração das linhas e, na barra de baixo, a contagem de linhas e a posição do cursor;
+- **Cabeçalho** com a identidade do Compilaço e os botões (Compilar e Gerar executável em destaque);
+- **Editor** com o código sendo elaborado, cores no código (palavras reservadas, tipos, números, narrações e operadores), destaque da linha atual, numeração das linhas e, na barra de baixo, a contagem de linhas e a posição do cursor;
 - **Botões Novo, Abrir, Salvar, Salvar como, Compilar e Gerar executável** (atalhos Ctrl+N, Ctrl+O, Ctrl+S, Ctrl+Shift+S, F5 e F6);
 - **Aba Tokens**: cada token reconhecido, com lexema, tipo (como na gramática), linha e coluna;
 - **Aba Erros**: todos os erros da compilação (léxicos e sintáticos), com linha, coluna e mensagem; clicar num erro mostra a mensagem completa e leva o cursor até ele;
-- **Aba Árvore sintática**: a árvore em `JTree`, com os nós de erro em vermelho;
+- **Aba Árvore sintática**: a árvore em `JTree`, com ícones por tipo de nó (regra, token e erro, este em vermelho);
 - **Aba Modo pânico**: o passo a passo da recuperação de cada erro;
-- **Resultado**: "GOL!" (verde) quando o código é aceito, ou "FALTA GRAVE" (vermelho) com o total de erros;
+- **Placar** na barra de baixo: número de tokens, número de erros e o resultado, "GOL! Código aceito" (verde) ou "FALTA GRAVE! Código não aceito" (vermelho);
 - **Realce das linhas com erro**: a linha fica com fundo vermelho (também na numeração), o trecho do erro ganha um sublinhado ondulado, e parar o mouse sobre a linha mostra a mensagem;
 - **Aba Código C**: o programa traduzido para C, a compilação com gcc e a saída do executável (ver abaixo).
 
@@ -94,7 +99,7 @@ O botão **Gerar executável (F6)** da interface:
 2. percorre a árvore sintática e escreve o programa equivalente em C (`gerador/GeradorC.java`);
 3. salva o `.c` numa pasta `saida` ao lado do código-fonte (ignorada pelo Git);
 4. chama `gcc arquivo.c -o arquivo` (`gerador/CompiladorC.java`);
-. roda o executável e mostra o que ele imprimiu (com limite de 10 segundos, contra laço infinito).
+5. roda o executável e mostra o que ele imprimiu (com limite de 10 segundos, contra laço infinito).
 
 | Compilaço | C |
 |---|---|
