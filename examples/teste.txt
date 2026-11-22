@@ -1,0 +1,5 @@
+apito_inicial()
+
+placar x = 2 + 3 * 4;
+
+fim_de_jogo

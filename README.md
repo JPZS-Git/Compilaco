@@ -29,6 +29,10 @@ Compilaco-generico/
 │       │   │   ├── TipoErro.java
 │       │   │   ├── Token.java
 │       │   │   └── TokenMgrError.java
+│       │   ├── gui/                           (interface gráfica)
+│       │   │   ├── InterfaceGrafica.java      (janela principal)
+│       │   │   ├── NumeracaoLinhas.java       (numeração das linhas do editor)
+│       │   │   └── RealceErros.java           (realce das linhas com erro)
 │       │   └── recovery/                      (modo pânico)
 │       │       ├── RecoverySet.java
 │       │       ├── First.java
@@ -44,6 +48,39 @@ Compilaco-generico/
 ├── build.bat / build.sh
 └── run-valid.bat / run-valid.sh
 ```
+
+## Interface gráfica
+
+No Windows:
+
+```bat
+.\run-gui.bat
+```
+
+No Linux/macOS:
+
+```sh
+./run-gui.sh
+```
+
+Ou, depois de compilar com `build.bat`/`build.sh`:
+
+```text
+java -cp out gui.InterfaceGrafica [arquivo]
+```
+
+A janela tem:
+
+- **Editor** com o código sendo elaborado, numeração das linhas e, na barra de baixo, a contagem de linhas e a posição do cursor;
+- **Botões Novo, Abrir, Salvar, Salvar como e Compilar** (atalhos Ctrl+N, Ctrl+O, Ctrl+S, Ctrl+Shift+S e F5);
+- **Aba Tokens**: cada token reconhecido, com lexema, tipo (como na gramática), linha e coluna;
+- **Aba Erros**: todos os erros da compilação (léxicos e sintáticos), com linha, coluna e mensagem; clicar num erro mostra a mensagem completa e leva o cursor até ele;
+- **Aba Árvore sintática**: a árvore em `JTree`, com os nós de erro em vermelho;
+- **Aba Modo pânico**: o passo a passo da recuperação de cada erro;
+- **Resultado**: "GOL!" (verde) quando o código é aceito, ou "FALTA GRAVE" (vermelho) com o total de erros;
+- **Realce das linhas com erro**: a linha fica com fundo vermelho (também na numeração), o trecho do erro ganha um sublinhado ondulado, e parar o mouse sobre a linha mostra a mensagem.
+
+A interface não faz análise nenhuma: ela chama o compilador (`Compilaco.criar(...).analisar()`) e mostra o resultado.
 
 ## Abrindo em uma IDE
 
@@ -100,7 +137,7 @@ ou:
 Compile:
 
 ```text
-javac -encoding UTF-8 -d out src/main/java/parser/*.java src/main/java/recovery/*.java
+javac -encoding UTF-8 -d out src/main/java/parser/*.java src/main/java/recovery/*.java src/main/java/gui/*.java
 ```
 
 Execute passando o arquivo com o código:
@@ -120,6 +157,7 @@ Opções (em qualquer ordem):
 | Opção | Efeito |
 |---|---|
 | `arquivo` | Caminho do código a analisar. Sem ele, abre o seletor de arquivos. |
+| `-` | Lê o código da entrada padrão, sem arquivo (ex.: colar o código no terminal com `@'...'@ \| java -cp out parser.Main -`). |
 | `--arvore` | Imprime a árvore sintática (com nós `erro` onde houve recuperação). |
 | `--debug` | Mostra o código lido, os tokens, o passo a passo do modo pânico e a árvore. |
 
