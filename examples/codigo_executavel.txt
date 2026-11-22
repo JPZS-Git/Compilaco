@@ -1,0 +1,23 @@
+apito_inicial()
+placar gols = 0, adversario = 2;
+estatistica posse = 62.5;
+narracao resultado = "jogo em andamento";
+
+enquanto_bola_rolar (gols < 3) {
+    gols = gols + 1;
+}
+
+placar pontos = 0;
+campeonato (placar rodada = 1; rodada <= 3; rodada = rodada + 1) {
+    pontos = pontos + rodada * 3;
+}
+
+var_analisa (gols > adversario) {
+    resultado = "vitória do time da casa";
+} segue_jogo {
+    resultado = "empate ou derrota";
+}
+
+placar saldo = (gols - adversario) * 10 / 2;
+posse = posse + 0.5;
+fim_de_jogo

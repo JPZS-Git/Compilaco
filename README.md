@@ -29,6 +29,9 @@ Compilaco-generico/
 │       │   │   ├── TipoErro.java
 │       │   │   ├── Token.java
 │       │   │   └── TokenMgrError.java
+│       │   ├── gerador/                       (geração de código C + gcc)
+│       │   │   ├── GeradorC.java              (traduz a árvore sintática para C)
+│       │   │   └── CompiladorC.java           (chama o gcc e roda o executável)
 │       │   ├── gui/                           (interface gráfica)
 │       │   │   ├── InterfaceGrafica.java      (janela principal)
 │       │   │   ├── NumeracaoLinhas.java       (numeração das linhas do editor)
@@ -72,15 +75,51 @@ java -cp out gui.InterfaceGrafica [arquivo]
 A janela tem:
 
 - **Editor** com o código sendo elaborado, numeração das linhas e, na barra de baixo, a contagem de linhas e a posição do cursor;
-- **Botões Novo, Abrir, Salvar, Salvar como e Compilar** (atalhos Ctrl+N, Ctrl+O, Ctrl+S, Ctrl+Shift+S e F5);
+- **Botões Novo, Abrir, Salvar, Salvar como, Compilar e Gerar executável** (atalhos Ctrl+N, Ctrl+O, Ctrl+S, Ctrl+Shift+S, F5 e F6);
 - **Aba Tokens**: cada token reconhecido, com lexema, tipo (como na gramática), linha e coluna;
 - **Aba Erros**: todos os erros da compilação (léxicos e sintáticos), com linha, coluna e mensagem; clicar num erro mostra a mensagem completa e leva o cursor até ele;
 - **Aba Árvore sintática**: a árvore em `JTree`, com os nós de erro em vermelho;
 - **Aba Modo pânico**: o passo a passo da recuperação de cada erro;
 - **Resultado**: "GOL!" (verde) quando o código é aceito, ou "FALTA GRAVE" (vermelho) com o total de erros;
-- **Realce das linhas com erro**: a linha fica com fundo vermelho (também na numeração), o trecho do erro ganha um sublinhado ondulado, e parar o mouse sobre a linha mostra a mensagem.
+- **Realce das linhas com erro**: a linha fica com fundo vermelho (também na numeração), o trecho do erro ganha um sublinhado ondulado, e parar o mouse sobre a linha mostra a mensagem;
+- **Aba Código C**: o programa traduzido para C, a compilação com gcc e a saída do executável (ver abaixo).
 
 A interface não faz análise nenhuma: ela chama o compilador (`Compilaco.criar(...).analisar()`) e mostra o resultado.
+
+## Geração de código executável (C + gcc)
+
+O botão **Gerar executável (F6)** da interface:
+
+1. compila o código Compilaço (só continua se não houver erros);
+2. percorre a árvore sintática e escreve o programa equivalente em C (`gerador/GeradorC.java`);
+3. salva o `.c` numa pasta `saida` ao lado do código-fonte (ignorada pelo Git);
+4. chama `gcc arquivo.c -o arquivo` (`gerador/CompiladorC.java`);
+5. roda o executável e mostra o que ele imprimiu (com limite de 5 segundos, contra laço infinito).
+
+| Compilaço | C |
+|---|---|
+| `apito_inicial()` … `fim_de_jogo` | `int main(void) { … return 0; }` |
+| `placar` / `estatistica` / `narracao` | `int` / `float` / `char *` |
+| `var_analisa (…) { } segue_jogo { }` | `if (…) { } else { }` |
+| `enquanto_bola_rolar (…) { }` | `while (…) { }` |
+| `campeonato (…) { }` | `for (…) { }` |
+
+Como o Compilaço não tem comando de saída, o `main` gerado termina imprimindo o valor final das variáveis declaradas no nível do programa. Variáveis sem valor inicial começam zeradas, e nomes que coincidem com palavras do C (ex.: `main`, `int`) ganham o prefixo `v_`.
+
+Exemplo: `examples/codigo_executavel.txt` gera um executável que imprime:
+
+```text
+gols = 3
+adversario = 2
+posse = 63
+resultado = vitória do time da casa
+pontos = 18
+saldo = 5
+```
+
+**gcc no Windows:** instale o MinGW-w64 (por exemplo, pelo MSYS2 ou pelo pacote do WinLibs) e coloque a pasta `bin` dele no PATH. Sem o gcc, a interface salva o `.c` e avisa que o executável não pôde ser gerado.
+
+**Limitação:** o Compilaço ainda não tem análise semântica, então um código sintaticamente válido pode gerar um C que o gcc recusa. Por exemplo, em `examples/codigo_valido.txt` a variável `saldo` é usada sem ser declarada: o gcc aponta o erro e a interface mostra a mensagem dele.
 
 ## Abrindo em uma IDE
 
@@ -137,7 +176,7 @@ ou:
 Compile:
 
 ```text
-javac -encoding UTF-8 -d out src/main/java/parser/*.java src/main/java/recovery/*.java src/main/java/gui/*.java
+javac -encoding UTF-8 -d out src/main/java/parser/*.java src/main/java/recovery/*.java src/main/java/gui/*.java src/main/java/gerador/*.java
 ```
 
 Execute passando o arquivo com o código:

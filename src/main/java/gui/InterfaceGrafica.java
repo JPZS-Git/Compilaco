@@ -14,6 +14,8 @@ import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.io.IOException;
 import java.io.StringReader;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.nio.file.Path;
@@ -45,6 +47,7 @@ import javax.swing.JTree;
 import javax.swing.KeyStroke;
 import javax.swing.ListSelectionModel;
 import javax.swing.SwingUtilities;
+import javax.swing.SwingWorker;
 import javax.swing.ToolTipManager;
 import javax.swing.UIManager;
 import javax.swing.event.DocumentEvent;
@@ -55,6 +58,8 @@ import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.DefaultTreeCellRenderer;
 import javax.swing.tree.DefaultTreeModel;
 
+import gerador.CompiladorC;
+import gerador.GeradorC;
 import parser.ArquivoFonte;
 import parser.Compilaco;
 import parser.CompilacoConstants;
@@ -71,7 +76,8 @@ import parser.Token;
  * Exibe o código sendo elaborado (com numeração e contagem de linhas), os
  * tokens reconhecidos, o texto de aceitação ou não, as mensagens de erro, a
  * árvore sintática e o passo a passo do modo pânico. As linhas com erro são
- * realçadas no próprio editor.
+ * realçadas no próprio editor. O botão "Gerar executável" traduz o programa
+ * para C e chama o gcc.
  *
  * A interface não faz análise nenhuma: ela só chama o compilador
  * (Compilaco.criar(...).analisar()) e mostra o resultado.
@@ -90,10 +96,12 @@ public class InterfaceGrafica extends JFrame {
     private static final int ABA_ERROS = 1;
     private static final int ABA_ARVORE = 2;
     private static final int ABA_PANICO = 3;
+    private static final int ABA_C = 4;
 
     private final ArquivoFonte arquivo = new ArquivoFonte();
 
     private List<ErroCompilacao> errosAtuais = List.of();
+    private No ultimaArvore;
     private boolean modificado = false;
 
     private final JTextArea editor = new JTextArea() {
@@ -123,6 +131,8 @@ public class InterfaceGrafica extends JFrame {
     private final JTree arvore = new JTree(new DefaultMutableTreeNode("Compile o código (F5) para ver a árvore"));
     private final JTextArea passosPanico = new JTextArea();
     private final JTextArea detalheErro = new JTextArea();
+    private final JTextArea codigoC = new JTextArea();
+    private final JTextArea saidaC = new JTextArea();
     private final JTabbedPane abas = new JTabbedPane();
 
     private final JLabel status = new JLabel();
@@ -243,6 +253,30 @@ public class InterfaceGrafica extends JFrame {
         abas.addTab("Erros", painelErros);
         abas.addTab("Árvore sintática", new JScrollPane(arvore));
         abas.addTab("Modo pânico", new JScrollPane(passosPanico));
+
+        codigoC.setEditable(false);
+        codigoC.setFont(fonteMonoespacada(13));
+        codigoC.setMargin(new java.awt.Insets(6, 8, 6, 8));
+        saidaC.setEditable(false);
+        saidaC.setLineWrap(true);
+        saidaC.setFont(fonteMonoespacada(13));
+        saidaC.setMargin(new java.awt.Insets(6, 8, 6, 8));
+        saidaC.setBackground(new Color(0x1E1E1E));
+        saidaC.setForeground(new Color(0xE6E6E6));
+        saidaC.setCaretColor(Color.WHITE);
+        limparCodigoC();
+
+        JPanel painelC = new JPanel(new BorderLayout());
+        JLabel tituloSaida = new JLabel("  Compilação com gcc e execução do programa");
+        tituloSaida.setBorder(BorderFactory.createEmptyBorder(4, 0, 4, 0));
+        JPanel painelSaida = new JPanel(new BorderLayout());
+        painelSaida.add(tituloSaida, BorderLayout.NORTH);
+        painelSaida.add(new JScrollPane(saidaC), BorderLayout.CENTER);
+        JSplitPane divisaoC = new JSplitPane(JSplitPane.VERTICAL_SPLIT, new JScrollPane(codigoC), painelSaida);
+        divisaoC.setResizeWeight(0.62);
+        divisaoC.setBorder(null);
+        painelC.add(divisaoC, BorderLayout.CENTER);
+        abas.addTab("Código C", painelC);
     }
 
     private JToolBar barraDeFerramentas() {
@@ -256,6 +290,7 @@ public class InterfaceGrafica extends JFrame {
         JButton compilar = new JButton(acaoCompilar);
         compilar.setFont(compilar.getFont().deriveFont(Font.BOLD));
         barra.add(compilar);
+        barra.add(new JButton(acaoExecutavel));
         return barra;
     }
 
@@ -270,6 +305,7 @@ public class InterfaceGrafica extends JFrame {
 
         JMenu compilarMenu = new JMenu("Compilar");
         compilarMenu.add(acaoCompilar);
+        compilarMenu.add(acaoExecutavel);
 
         JMenuBar barra = new JMenuBar();
         barra.add(arquivoMenu);
@@ -299,6 +335,7 @@ public class InterfaceGrafica extends JFrame {
     private final Action acaoSalvar = acao("Salvar", KeyEvent.VK_S, 0, e -> salvar(false));
     private final Action acaoSalvarComo = acao("Salvar como", KeyEvent.VK_S, InputEvent.SHIFT_DOWN_MASK, e -> salvar(true));
     private final Action acaoCompilar = acaoSemCtrl("Compilar (F5)", KeyStroke.getKeyStroke(KeyEvent.VK_F5, 0), e -> compilar());
+    private final Action acaoExecutavel = acaoSemCtrl("Gerar executável (F6)", KeyStroke.getKeyStroke(KeyEvent.VK_F6, 0), e -> gerarExecutavel());
     private final Action acaoSair = acao("Sair", KeyEvent.VK_Q, 0, e -> sair());
 
     private void novo() {
@@ -387,7 +424,8 @@ public class InterfaceGrafica extends JFrame {
     // Compilação: chama o compilador e mostra o resultado
     // ------------------------------------------------------------------
 
-    private void compilar() {
+    /** Compila o código do editor e mostra o resultado. Devolve true se não houve erros. */
+    private boolean compilar() {
         String codigo = editor.getText();
         List<ErroCompilacao> erros = new ArrayList<>();
         List<String> passos = List.of();
@@ -408,6 +446,7 @@ public class InterfaceGrafica extends JFrame {
         erros.sort(Comparator.comparingInt(ErroCompilacao::linha)
                 .thenComparingInt(ErroCompilacao::coluna));
         errosAtuais = List.copyOf(erros);
+        ultimaArvore = raiz;
 
         mostrarTokens(codigo);
         mostrarErros(erros);
@@ -428,6 +467,128 @@ public class InterfaceGrafica extends JFrame {
                     + erros.size() + (erros.size() == 1 ? " erro" : " erros"), VERMELHO);
             abas.setSelectedIndex(ABA_ERROS);
         }
+        return erros.isEmpty();
+    }
+
+    // ------------------------------------------------------------------
+    // Geração de código: C + gcc (ponto extra)
+    // ------------------------------------------------------------------
+
+    /**
+     * Compila o código, traduz a árvore para C, salva o arquivo .c, chama o
+     * gcc e roda o executável, mostrando tudo na aba "Código C".
+     */
+    private void gerarExecutavel() {
+        if (!compilar()) {
+            JOptionPane.showMessageDialog(this,
+                    "O código tem erros. Corrija-os antes de gerar o executável.",
+                    "Gerar executável", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        String nomeFonte = arquivo.getNome();
+        String c;
+        try {
+            c = GeradorC.gerar(ultimaArvore, nomeFonte);
+        } catch (RuntimeException e) {
+            mostrarFalha("Não foi possível gerar o código C", e);
+            return;
+        }
+        codigoC.setText(c);
+        codigoC.setCaretPosition(0);
+        abas.setSelectedIndex(ABA_C);
+
+        Path fonteC;
+        try {
+            fonteC = arquivoC();
+            Files.writeString(fonteC, c, StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            mostrarFalha("Não foi possível salvar o arquivo C", e);
+            return;
+        }
+
+        Path executavel = CompiladorC.executavelDe(fonteC);
+        saidaC.setText("Código C salvo em:\n  " + fonteC.toAbsolutePath() + "\n\n"
+                + "$ gcc " + fonteC.getFileName() + " -o " + executavel.getFileName() + "\n");
+        acaoExecutavel.setEnabled(false);
+        mostrarResultadoPendente("Compilando com gcc...");
+
+        new SwingWorker<String, Void>() {
+            private boolean gerou;
+
+            @Override
+            protected String doInBackground() {
+                StringBuilder relatorio = new StringBuilder();
+                CompiladorC.Resultado gcc;
+                try {
+                    gcc = CompiladorC.compilar(fonteC, executavel);
+                } catch (IOException e) {
+                    return "\n[gcc não encontrado]\n"
+                            + "Para gerar o executável, instale o gcc (no Windows: MinGW-w64)\n"
+                            + "e coloque-o no PATH. O código C já foi salvo e pode ser\n"
+                            + "compilado depois com o comando acima.\n";
+                }
+                relatorio.append(gcc.saida());
+                if (!gcc.sucesso()) {
+                    relatorio.append("\n[gcc] A compilação do código C falhou.\n")
+                            .append("Erros do gcc costumam indicar problemas que o Compilaço ainda não\n")
+                            .append("verifica, por não ter análise semântica (ex.: variável não declarada).\n");
+                    return relatorio.toString();
+                }
+                gerou = true;
+                relatorio.append("[gcc] Executável gerado: ").append(executavel.toAbsolutePath()).append("\n\n");
+                relatorio.append("$ ").append(executavel.getFileName()).append('\n');
+                try {
+                    CompiladorC.Resultado execucao = CompiladorC.executar(executavel);
+                    relatorio.append(execucao.saida());
+                    if (execucao.tempoEsgotado()) {
+                        relatorio.append("\n[programa interrompido: passou de 10 segundos (laço infinito?)]\n");
+                    } else {
+                        relatorio.append("\n[programa encerrado com código ").append(execucao.codigoSaida()).append("]\n");
+                    }
+                } catch (IOException e) {
+                    relatorio.append("[não foi possível executar o programa: ").append(e.getMessage()).append("]\n");
+                }
+                return relatorio.toString();
+            }
+
+            @Override
+            protected void done() {
+                try {
+                    saidaC.append(get());
+                } catch (Exception e) {
+                    saidaC.append("\n[erro ao gerar o executável: " + e.getMessage() + "]\n");
+                }
+                acaoExecutavel.setEnabled(true);
+                if (gerou) {
+                    mostrarResultado("GOL! Código aceito e executável gerado", VERDE);
+                } else {
+                    mostrarResultado("GOL no Compilaço, mas o executável não foi gerado (veja a aba Código C)", new Color(0xB26A00));
+                }
+            }
+        }.execute();
+    }
+
+    /**
+     * Onde salvar o .c: numa pasta "saida" ao lado do código-fonte
+     * (ou na pasta temporária, se o código ainda não foi salvo).
+     */
+    private Path arquivoC() throws IOException {
+        Path fonte = arquivo.getCaminho();
+        Path pasta = (fonte != null && fonte.toAbsolutePath().getParent() != null)
+                ? fonte.toAbsolutePath().getParent().resolve("saida")
+                : Path.of(System.getProperty("java.io.tmpdir"), "compilaco");
+        Files.createDirectories(pasta);
+        String nome = fonte != null ? fonte.getFileName().toString().replaceFirst("\\.[^.]*$", "") : "programa";
+        return pasta.resolve(nome + ".c");
+    }
+
+    private void limparCodigoC() {
+        codigoC.setText("Clique em \"Gerar executável (F6)\" para traduzir o programa para C.\n\n"
+                + "O código C aparece aqui; embaixo, a compilação com gcc e a saída do programa.\n"
+                + "Como o Compilaço não tem comando de saída, o programa gerado imprime\n"
+                + "no final o valor das variáveis declaradas.");
+        saidaC.setText("");
     }
 
     private void mostrarTokens(String codigo) {
@@ -495,6 +656,8 @@ public class InterfaceGrafica extends JFrame {
         abas.setTitleAt(ABA_ERROS, "Erros");
         arvore.setModel(new DefaultTreeModel(new DefaultMutableTreeNode("Compile o código (F5) para ver a árvore")));
         passosPanico.setText("Compile o código (F5). Se houver erros, aqui aparece como o modo pânico se recuperou de cada um.");
+        ultimaArvore = null;
+        limparCodigoC();
         mostrarResultadoPendente(mensagem);
     }
 

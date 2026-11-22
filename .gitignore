@@ -21,3 +21,6 @@ bin/
 # OS
 .DS_Store
 Thumbs.db
+
+# Codigo C e executaveis gerados pelo Compilaco
+saida/

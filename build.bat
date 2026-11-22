@@ -13,7 +13,7 @@ mkdir "%OUTPUT%"
 echo Compilando projeto...
 
 rem Sem aspas no curinga: no Windows o javac nao expande *.java entre aspas
-javac -encoding UTF-8 -d "%OUTPUT%" %SOURCE%\*.java src\main\java\recovery\*.java src\main\java\gui\*.java
+javac -encoding UTF-8 -d "%OUTPUT%" %SOURCE%\*.java src\main\java\recovery\*.java src\main\java\gui\*.java src\main\java\gerador\*.java
 
 if errorlevel 1 (
     echo Erro durante a compilacao.
