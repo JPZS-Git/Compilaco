@@ -94,7 +94,7 @@ O botão **Gerar executável (F6)** da interface:
 2. percorre a árvore sintática e escreve o programa equivalente em C (`gerador/GeradorC.java`);
 3. salva o `.c` numa pasta `saida` ao lado do código-fonte (ignorada pelo Git);
 4. chama `gcc arquivo.c -o arquivo` (`gerador/CompiladorC.java`);
-5. roda o executável e mostra o que ele imprimiu (com limite de 5 segundos, contra laço infinito).
+. roda o executável e mostra o que ele imprimiu (com limite de 10 segundos, contra laço infinito).
 
 | Compilaço | C |
 |---|---|
